@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:http/http.dart' as http;
+import 'package:provider/provider.dart';
+import 'dart:convert';
+import '../../services/auth_service.dart';
 
 class AddWorkerModal extends StatefulWidget {
   final String workerType;
@@ -12,31 +16,42 @@ class AddWorkerModal extends StatefulWidget {
 
 class _AddWorkerModalState extends State<AddWorkerModal> {
   final _formKey = GlobalKey<FormState>();
-  final _fullNameController = TextEditingController();
-  final _roleController = TextEditingController();
-  final _addressController = TextEditingController();
-  final _phoneController = TextEditingController();
-  final _dateHiredController = TextEditingController();
-  final _shiftScheduleController = TextEditingController();
-  final _rateController = TextEditingController();
+  final _firstNameController = TextEditingController();
+  final _middleNameController = TextEditingController();
+  final _lastNameController = TextEditingController();
+  final _phoneNumberController = TextEditingController();
+  final _birthdateController = TextEditingController();
+  final _generatedEmailController = TextEditingController();
+  final _passwordController = TextEditingController();
 
+  String _selectedStatus = 'active';
   XFile? _selectedImage;
+  bool _isLoading = false;
 
   @override
   void initState() {
     super.initState();
-    _roleController.text = widget.workerType;
+    _passwordController.text = 'PASSWORD';
+  }
+
+  void _generateEmail() {
+    final firstName = _firstNameController.text.trim().toLowerCase();
+    final lastName = _lastNameController.text.trim().toLowerCase();
+
+    if (firstName.isNotEmpty && lastName.isNotEmpty) {
+      _generatedEmailController.text = '$lastName.$firstName@structura.com';
+    }
   }
 
   @override
   void dispose() {
-    _fullNameController.dispose();
-    _roleController.dispose();
-    _addressController.dispose();
-    _phoneController.dispose();
-    _dateHiredController.dispose();
-    _shiftScheduleController.dispose();
-    _rateController.dispose();
+    _firstNameController.dispose();
+    _middleNameController.dispose();
+    _lastNameController.dispose();
+    _phoneNumberController.dispose();
+    _birthdateController.dispose();
+    _generatedEmailController.dispose();
+    _passwordController.dispose();
     super.dispose();
   }
 
@@ -62,24 +77,81 @@ class _AddWorkerModalState extends State<AddWorkerModal> {
     );
     if (picked != null) {
       setState(() {
-        controller.text =
-            '${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}-${picked.year}';
+        controller.text = picked.toIso8601String().split('T')[0];
       });
     }
   }
 
-  void _handleSubmit() {
+  Future<void> _handleSubmit() async {
     if (_formKey.currentState!.validate()) {
-      Navigator.of(context).pop({
-        'fullName': _fullNameController.text,
-        'role': _roleController.text,
-        'address': _addressController.text,
-        'phoneNumber': _phoneController.text,
-        'dateHired': _dateHiredController.text,
-        'shiftSchedule': _shiftScheduleController.text,
-        'rate': _rateController.text,
-        'image': _selectedImage,
+      setState(() {
+        _isLoading = true;
       });
+
+      try {
+        // Get the current logged-in user's ID from AuthService
+        final authService = Provider.of<AuthService>(context, listen: false);
+        final userId = authService.currentUser?['user_id'];
+
+        final supervisorData = {
+          'user_id': userId, // Include the currently logged-in user's ID
+          'first_name': _firstNameController.text.trim(),
+          'middle_name': _middleNameController.text.trim().isEmpty
+              ? null
+              : _middleNameController.text.trim(),
+          'last_name': _lastNameController.text.trim(),
+          'email': _generatedEmailController.text.trim(),
+          'password_hash': _passwordController.text
+              .trim(), // Include password for hashing
+          'phone_number': _phoneNumberController.text.trim(),
+          'birthdate': _birthdateController.text.trim().isEmpty
+              ? null
+              : _birthdateController.text.trim(),
+          'status': _selectedStatus,
+        };
+
+        print('Sending supervisor data: $supervisorData');
+
+        final response = await http.post(
+          Uri.parse('http://127.0.0.1:8000/api/supervisors/'),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode(supervisorData),
+        );
+
+        print('Response status: ${response.statusCode}');
+        print('Response body: ${response.body}');
+
+        if (response.statusCode == 201 || response.statusCode == 200) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Supervisor added successfully!')),
+          );
+          Navigator.of(context).pop();
+        } else {
+          try {
+            final errorData = jsonDecode(response.body);
+            final errorMessage =
+                errorData['detail'] ??
+                errorData['error'] ??
+                errorData.toString() ??
+                'Failed to add supervisor';
+            ScaffoldMessenger.of(
+              context,
+            ).showSnackBar(SnackBar(content: Text('Error: $errorMessage')));
+          } catch (e) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Error: Failed to add supervisor')),
+            );
+          }
+        }
+      } catch (e) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error: $e')));
+      } finally {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -198,10 +270,11 @@ class _AddWorkerModalState extends State<AddWorkerModal> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            // Full Name
+                            // First Name
                             _buildTextField(
-                              controller: _fullNameController,
-                              hintText: 'Full Name',
+                              controller: _firstNameController,
+                              hintText: 'First Name',
+                              onChanged: (value) => _generateEmail(),
                               validator: (value) {
                                 if (value == null || value.isEmpty) {
                                   return 'Required';
@@ -211,10 +284,18 @@ class _AddWorkerModalState extends State<AddWorkerModal> {
                             ),
                             const SizedBox(height: 16),
 
-                            // Role
+                            // Middle Name
                             _buildTextField(
-                              controller: _roleController,
-                              hintText: 'Role',
+                              controller: _middleNameController,
+                              hintText: 'Middle Name (Optional)',
+                            ),
+                            const SizedBox(height: 16),
+
+                            // Last Name
+                            _buildTextField(
+                              controller: _lastNameController,
+                              hintText: 'Last Name',
+                              onChanged: (value) => _generateEmail(),
                               validator: (value) {
                                 if (value == null || value.isEmpty) {
                                   return 'Required';
@@ -224,22 +305,25 @@ class _AddWorkerModalState extends State<AddWorkerModal> {
                             ),
                             const SizedBox(height: 16),
 
-                            // Address
+                            // Generated Account Email
                             _buildTextField(
-                              controller: _addressController,
-                              hintText: 'Address',
-                              validator: (value) {
-                                if (value == null || value.isEmpty) {
-                                  return 'Required';
-                                }
-                                return null;
-                              },
+                              controller: _generatedEmailController,
+                              hintText: 'Account Email (Auto-generated)',
+                              readOnly: true,
+                            ),
+                            const SizedBox(height: 16),
+
+                            // Generated Password
+                            _buildTextField(
+                              controller: _passwordController,
+                              hintText: 'Password (Default)',
+                              readOnly: true,
                             ),
                             const SizedBox(height: 16),
 
                             // Phone Number
                             _buildTextField(
-                              controller: _phoneController,
+                              controller: _phoneNumberController,
                               hintText: 'Phone Number',
                               keyboardType: TextInputType.phone,
                               validator: (value) {
@@ -251,47 +335,70 @@ class _AddWorkerModalState extends State<AddWorkerModal> {
                             ),
                             const SizedBox(height: 16),
 
-                            // Date Hired
+                            // Birthdate
                             _buildTextField(
-                              controller: _dateHiredController,
-                              hintText: 'Date Hired',
+                              controller: _birthdateController,
+                              hintText: 'Birthdate (Optional)',
                               readOnly: true,
                               suffixIcon: Icons.calendar_today_outlined,
                               onTap: () =>
-                                  _selectDate(context, _dateHiredController),
-                              validator: (value) {
-                                if (value == null || value.isEmpty) {
-                                  return 'Required';
-                                }
-                                return null;
-                              },
+                                  _selectDate(context, _birthdateController),
                             ),
                             const SizedBox(height: 16),
 
-                            // Shift Schedule
-                            _buildTextField(
-                              controller: _shiftScheduleController,
-                              hintText: 'Shift Schedule',
-                              validator: (value) {
-                                if (value == null || value.isEmpty) {
-                                  return 'Required';
-                                }
-                                return null;
-                              },
-                            ),
-                            const SizedBox(height: 16),
-
-                            // Rate
-                            _buildTextField(
-                              controller: _rateController,
-                              hintText: 'Rate',
-                              keyboardType: TextInputType.number,
-                              validator: (value) {
-                                if (value == null || value.isEmpty) {
-                                  return 'Required';
-                                }
-                                return null;
-                              },
+                            // Status Dropdown
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'Status',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color: Color(0xFF6B7280),
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                Container(
+                                  width: double.infinity,
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                    vertical: 4,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFF9FAFB),
+                                    border: Border.all(
+                                      color: Colors.grey[300]!,
+                                    ),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: DropdownButtonHideUnderline(
+                                    child: DropdownButton<String>(
+                                      value: _selectedStatus,
+                                      isExpanded: true,
+                                      items: const [
+                                        DropdownMenuItem(
+                                          value: 'active',
+                                          child: Text('Active'),
+                                        ),
+                                        DropdownMenuItem(
+                                          value: 'deactivated',
+                                          child: Text('Deactivated'),
+                                        ),
+                                        DropdownMenuItem(
+                                          value: 'fired',
+                                          child: Text('Fired'),
+                                        ),
+                                      ],
+                                      onChanged: (value) {
+                                        setState(() {
+                                          _selectedStatus = value ?? 'active';
+                                        });
+                                      },
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
                             const SizedBox(height: 24),
 
@@ -299,7 +406,7 @@ class _AddWorkerModalState extends State<AddWorkerModal> {
                             SizedBox(
                               width: double.infinity,
                               child: ElevatedButton(
-                                onPressed: _handleSubmit,
+                                onPressed: _isLoading ? null : _handleSubmit,
                                 style: ElevatedButton.styleFrom(
                                   padding: const EdgeInsets.symmetric(
                                     vertical: 14,
@@ -309,14 +416,26 @@ class _AddWorkerModalState extends State<AddWorkerModal> {
                                     borderRadius: BorderRadius.circular(8),
                                   ),
                                 ),
-                                child: const Text(
-                                  'Add',
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w600,
-                                    color: Colors.white,
-                                  ),
-                                ),
+                                child: _isLoading
+                                    ? const SizedBox(
+                                        height: 20,
+                                        width: 20,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          valueColor:
+                                              AlwaysStoppedAnimation<Color>(
+                                                Colors.white,
+                                              ),
+                                        ),
+                                      )
+                                    : const Text(
+                                        'Add Supervisor',
+                                        style: TextStyle(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w600,
+                                          color: Colors.white,
+                                        ),
+                                      ),
                               ),
                             ),
                           ],
@@ -341,12 +460,14 @@ class _AddWorkerModalState extends State<AddWorkerModal> {
     IconData? suffixIcon,
     VoidCallback? onTap,
     String? Function(String?)? validator,
+    Function(String)? onChanged,
   }) {
     return TextFormField(
       controller: controller,
       keyboardType: keyboardType,
       readOnly: readOnly,
       onTap: onTap,
+      onChanged: onChanged,
       decoration: InputDecoration(
         hintText: hintText,
         hintStyle: TextStyle(fontSize: 14, color: Colors.grey[400]),

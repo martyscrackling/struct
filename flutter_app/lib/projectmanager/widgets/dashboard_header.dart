@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../settings_page.dart';
 import '../notification_page.dart';
+import '../../services/auth_service.dart';
+import 'package:go_router/go_router.dart';
 
 class DashboardHeader extends StatelessWidget {
   const DashboardHeader({super.key, this.title = 'Dashboard'});
@@ -205,10 +207,48 @@ class _ProfileMenu extends StatelessWidget {
         ).push(MaterialPageRoute(builder: (_) => const NotificationPage()));
         break;
       case _ProfileAction.logout:
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('Logging out...')));
+        _performLogout(context);
         break;
+    }
+  }
+
+  Future<void> _performLogout(BuildContext context) async {
+    // Show loading indicator
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(child: CircularProgressIndicator()),
+    );
+
+    try {
+      // Call logout on auth service
+      final authService = AuthService();
+      await authService.logout();
+
+      // Close the loading dialog
+      if (context.mounted) {
+        Navigator.of(context).pop();
+      }
+
+      // Navigate to login page using GoRouter
+      if (context.mounted) {
+        context.go('/login');
+      }
+    } catch (e) {
+      // Close the loading dialog
+      if (context.mounted) {
+        Navigator.of(context).pop();
+      }
+
+      // Show error message
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Logout error: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 

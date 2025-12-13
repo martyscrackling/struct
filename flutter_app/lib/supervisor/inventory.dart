@@ -1,4 +1,3 @@
-
 import 'package:flutter/material.dart';
 import 'widgets/sidebar.dart';
 
@@ -108,6 +107,16 @@ class _InventoryPageState extends State<InventoryPage> {
                         ),
                       ),
                       const SizedBox(width: 12),
+                      TextButton.icon(
+                        onPressed: () {
+                          // Open the Materials page
+                          Navigator.of(context).push(MaterialPageRoute(builder: (_) => const MaterialsPage()));
+                        },
+                        icon: const Icon(Icons.layers),
+                        label: const Text('Materials'),
+                        style: TextButton.styleFrom(foregroundColor: primary),
+                      ),
+                      const SizedBox(width: 8),
                       ElevatedButton.icon(
                         onPressed: () {
                           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Add Item (demo)')));
@@ -236,7 +245,7 @@ class _InventoryPageState extends State<InventoryPage> {
           ],
         ),
       ),
-    );
+      );
   }
 
   Widget _statusChip(String status) {
@@ -310,6 +319,194 @@ class _InventoryPageState extends State<InventoryPage> {
         actions: [
           TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Close')),
           ElevatedButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('OK')),
+        ],
+      ),
+    );
+  }
+}
+
+// New: simple Materials data model and page (example UI)
+class MaterialItem {
+  final String id;
+  final String name;
+  final String unit;
+  double quantity; // changed from final to mutable
+  final String status;
+
+  MaterialItem({required this.id, required this.name, required this.unit, required this.quantity, required this.status});
+}
+
+class MaterialsPage extends StatefulWidget {
+  const MaterialsPage({super.key});
+
+  @override
+  State<MaterialsPage> createState() => _MaterialsPageState();
+}
+
+class _MaterialsPageState extends State<MaterialsPage> {
+  final Color primary = const Color(0xFF1396E9);
+  final Color neutral = const Color(0xFFF6F8FA);
+
+  final List<MaterialItem> _materials = [
+    MaterialItem(id: 'm1', name: 'Cement 50kg', unit: 'bags', quantity: 120, status: 'In Stock'),
+    MaterialItem(id: 'm2', name: 'Rebar 12mm', unit: 'pcs', quantity: 450, status: 'Low'),
+    MaterialItem(id: 'm3', name: 'Sand (m3)', unit: 'm3', quantity: 32.5, status: 'In Stock'),
+    MaterialItem(id: 'm4', name: 'Gravel (m3)', unit: 'm3', quantity: 18.0, status: 'Reserved'),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: neutral,
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        iconTheme: const IconThemeData(color: Color(0xFF0C1935)),
+        title: const Text('Materials', style: TextStyle(color: Color(0xFF0C1935), fontWeight: FontWeight.w800)),
+        elevation: 0,
+        actions: [
+          IconButton(
+            onPressed: () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Add Material (demo)'))),
+            icon: const Icon(Icons.add, color: Color(0xFF1396E9)),
+          )
+        ],
+      ),
+      body: Padding(
+        padding: const EdgeInsets.all(18),
+        child: GridView.builder(
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 2,
+            mainAxisExtent: 140, // slightly larger to fit 'Use' button
+            crossAxisSpacing: 12,
+            mainAxisSpacing: 12,
+          ),
+          itemCount: _materials.length,
+          itemBuilder: (context, i) {
+            final m = _materials[i];
+            return Card(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              child: InkWell(
+                onTap: () => _showMaterialDetails(m),
+                borderRadius: BorderRadius.circular(10),
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text(m.name, style: const TextStyle(fontWeight: FontWeight.w800)),
+                    const SizedBox(height: 6),
+                    Row(children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                        decoration: BoxDecoration(color: Colors.grey[100], borderRadius: BorderRadius.circular(8)),
+                        child: Text('${_formatQty(m.quantity)} ${m.unit}', style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                      ),
+                      const SizedBox(width: 8),
+                      _materialStatusChip(m.status),
+                      const Spacer(),
+                      // show details / use
+                      IconButton(onPressed: () => _showMaterialDetails(m), icon: const Icon(Icons.more_horiz)),
+                    ]),
+                    const Spacer(),
+                    // small Use button directly on card for quick deduct
+                    Align(
+                      alignment: Alignment.bottomRight,
+                      child: TextButton.icon(
+                        onPressed: () => _showUseDialog(m),
+                        icon: const Icon(Icons.remove_circle_outline, size: 18),
+                        label: const Text('Use', style: TextStyle(fontSize: 12)),
+                      ),
+                    )
+                  ]),
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  String _formatQty(double q) {
+    return q == q.roundToDouble() ? q.toInt().toString() : q.toString();
+  }
+
+  Widget _materialStatusChip(String status) {
+    final color = status.toLowerCase() == 'in stock' ? Colors.green : (status.toLowerCase() == 'low' ? Colors.orange : Colors.redAccent);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      decoration: BoxDecoration(color: color.withOpacity(0.12), borderRadius: BorderRadius.circular(8)),
+      child: Text(status, style: TextStyle(color: color, fontWeight: FontWeight.w700, fontSize: 12)),
+    );
+  }
+
+  // New: dialog to enter used quantity and deduct it
+  void _showUseDialog(MaterialItem m) {
+    final controller = TextEditingController();
+    String? error;
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(builder: (ctx2, setStateDialog) {
+        return AlertDialog(
+          title: Text('Use ${m.name}'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('Available: ${_formatQty(m.quantity)} ${m.unit}'),
+              const SizedBox(height: 8),
+              TextField(
+                controller: controller,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                decoration: InputDecoration(
+                  labelText: 'Quantity to use',
+                  hintText: 'e.g. 5',
+                  errorText: error,
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Cancel')),
+            ElevatedButton(
+              onPressed: () {
+                final input = controller.text.trim();
+                final used = double.tryParse(input);
+                if (used == null || used <= 0) {
+                  setStateDialog(() => error = 'Enter a positive number');
+                  return;
+                }
+                if (used > m.quantity) {
+                  setStateDialog(() => error = 'Not enough in stock');
+                  return;
+                }
+                // update outer state so UI refreshes
+                setState(() {
+                  m.quantity = (m.quantity - used);
+                });
+                Navigator.of(ctx).pop();
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Used ${_formatQty(used)} ${m.unit} from ${m.name}')));
+              },
+              child: const Text('Use'),
+            ),
+          ],
+        );
+      }),
+    );
+  }
+
+  void _showMaterialDetails(MaterialItem m) {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(m.name),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(children: [const Text('Quantity: ', style: TextStyle(fontWeight: FontWeight.w700)), Text('${_formatQty(m.quantity)} ${m.unit}')]),
+            const SizedBox(height: 8),
+            Row(children: [const Text('Status: ', style: TextStyle(fontWeight: FontWeight.w700)), _materialStatusChip(m.status)]),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Close')),
+          TextButton(onPressed: () { Navigator.of(ctx).pop(); _showUseDialog(m); }, child: const Text('Use')),
         ],
       ),
     );

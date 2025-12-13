@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import 'dart:io';
+import '../../services/auth_service.dart';
 
 class CreateProjectModal extends StatefulWidget {
   const CreateProjectModal({super.key});
@@ -11,14 +15,33 @@ class CreateProjectModal extends StatefulWidget {
 class _CreateProjectModalState extends State<CreateProjectModal> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
-  final _addressController = TextEditingController();
+  final _descriptionController = TextEditingController();
+  final _streetController = TextEditingController();
   final _startDateController = TextEditingController();
   final _endDateController = TextEditingController();
   final _budgetController = TextEditingController();
+  bool _isSubmitting = false;
+
+  // Address hierarchy state
+  int? _selectedRegionId;
+  int? _selectedProvinceId;
+  int? _selectedCityId;
+  int? _selectedBarangayId;
+
+  List<Map<String, dynamic>> _regions = [];
+  List<Map<String, dynamic>> _provinces = [];
+  List<Map<String, dynamic>> _cities = [];
+  List<Map<String, dynamic>> _barangays = [];
+  List<Map<String, dynamic>> _supervisors = [];
+  List<Map<String, dynamic>> _clients = [];
+
+  bool _isLoadingRegions = false;
+  bool _isLoadingSupervisors = false;
+  bool _isLoadingClients = false;
 
   String? _selectedProjectType;
-  String? _selectedClient;
-  String? _selectedSupervisor;
+  int? _selectedClientId; // Store client_id instead of name
+  int? _selectedSupervisorId; // Store supervisor_id instead of name
   XFile? _selectedImage;
 
   final List<String> _projectTypes = [
@@ -28,37 +51,162 @@ class _CreateProjectModalState extends State<CreateProjectModal> {
     'Industrial',
   ];
 
-  final List<String> _clients = [
-    'John Doe',
-    'Jane Smith',
-    'ABC Corporation',
-    'XYZ Company',
-  ];
-
-  final List<String> _supervisors = [
-    'Mark Johnson',
-    'Sarah Williams',
-    'Robert Brown',
-    'Emily Davis',
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _fetchRegions();
+    _fetchSupervisors();
+    _fetchClients();
+  }
 
   @override
   void dispose() {
     _nameController.dispose();
-    _addressController.dispose();
+    _descriptionController.dispose();
+    _streetController.dispose();
     _startDateController.dispose();
     _endDateController.dispose();
     _budgetController.dispose();
     super.dispose();
   }
 
+  Future<void> _fetchRegions() async {
+    try {
+      setState(() => _isLoadingRegions = true);
+      final response = await http.get(
+        Uri.parse('http://127.0.0.1:8000/api/regions/'),
+      );
+      if (response.statusCode == 200) {
+        final List<dynamic> data = jsonDecode(response.body);
+        setState(() {
+          _regions = data.cast<Map<String, dynamic>>();
+        });
+      }
+    } catch (e) {
+      print('Error fetching regions: $e');
+    } finally {
+      setState(() => _isLoadingRegions = false);
+    }
+  }
+
+  Future<void> _fetchProvinces(int regionId) async {
+    try {
+      final response = await http.get(
+        Uri.parse('http://127.0.0.1:8000/api/provinces/?region=$regionId'),
+      );
+      if (response.statusCode == 200) {
+        final List<dynamic> data = jsonDecode(response.body);
+        setState(() {
+          _provinces = data.cast<Map<String, dynamic>>();
+          _selectedProvinceId = null;
+          _cities = [];
+          _barangays = [];
+        });
+      }
+    } catch (e) {
+      print('Error fetching provinces: $e');
+    }
+  }
+
+  Future<void> _fetchCities(int provinceId) async {
+    try {
+      final response = await http.get(
+        Uri.parse('http://127.0.0.1:8000/api/cities/?province=$provinceId'),
+      );
+      if (response.statusCode == 200) {
+        final List<dynamic> data = jsonDecode(response.body);
+        setState(() {
+          _cities = data.cast<Map<String, dynamic>>();
+          _selectedCityId = null;
+          _barangays = [];
+        });
+      }
+    } catch (e) {
+      print('Error fetching cities: $e');
+    }
+  }
+
+  Future<void> _fetchBarangays(int cityId) async {
+    try {
+      final response = await http.get(
+        Uri.parse('http://127.0.0.1:8000/api/barangays/?city=$cityId'),
+      );
+      if (response.statusCode == 200) {
+        final List<dynamic> data = jsonDecode(response.body);
+        setState(() {
+          _barangays = data.cast<Map<String, dynamic>>();
+          _selectedBarangayId = null;
+        });
+      }
+    } catch (e) {
+      print('Error fetching barangays: $e');
+    }
+  }
+
+  Future<void> _fetchSupervisors() async {
+    try {
+      setState(() => _isLoadingSupervisors = true);
+      final response = await http.get(
+        Uri.parse('http://127.0.0.1:8000/api/supervisors/'),
+      );
+      if (response.statusCode == 200) {
+        final List<dynamic> data = jsonDecode(response.body);
+        setState(() {
+          _supervisors = data.cast<Map<String, dynamic>>();
+        });
+      }
+    } catch (e) {
+      print('Error fetching supervisors: $e');
+    } finally {
+      setState(() => _isLoadingSupervisors = false);
+    }
+  }
+
+  Future<void> _fetchClients() async {
+    try {
+      setState(() => _isLoadingClients = true);
+      final response = await http.get(
+        Uri.parse('http://127.0.0.1:8000/api/clients/'),
+      );
+      if (response.statusCode == 200) {
+        final List<dynamic> data = jsonDecode(response.body);
+        setState(() {
+          _clients = data.cast<Map<String, dynamic>>();
+        });
+      }
+    } catch (e) {
+      print('Error fetching clients: $e');
+    } finally {
+      setState(() => _isLoadingClients = false);
+    }
+  }
+
   Future<void> _pickImage() async {
-    final ImagePicker picker = ImagePicker();
-    final XFile? image = await picker.pickImage(source: ImageSource.gallery);
-    if (image != null) {
-      setState(() {
-        _selectedImage = image;
-      });
+    try {
+      final ImagePicker picker = ImagePicker();
+      final XFile? image = await picker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 80,
+      );
+
+      if (image != null) {
+        setState(() {
+          _selectedImage = image;
+        });
+        print('✅ Image selected: ${image.name}');
+      } else {
+        print('ℹ️ Image picker cancelled');
+      }
+    } catch (e) {
+      print('❌ Error picking image: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error picking image: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 
@@ -80,20 +228,253 @@ class _CreateProjectModalState extends State<CreateProjectModal> {
     }
   }
 
-  void _handleSubmit() {
+  String _convertDateFormat(String dateStr) {
+    // Convert MM/DD/YYYY to YYYY-MM-DD
+    if (dateStr.isEmpty) return '';
+    try {
+      final parts = dateStr.split('/');
+      if (parts.length == 3) {
+        final month = parts[0].padLeft(2, '0');
+        final day = parts[1].padLeft(2, '0');
+        final year = parts[2];
+        return '$year-$month-$day';
+      }
+      return dateStr;
+    } catch (e) {
+      print('Error converting date: $e');
+      return dateStr;
+    }
+  }
+
+  Future<String?> _saveImageToAssets(String projectId) async {
+    if (_selectedImage == null) {
+      print('❌ No image selected');
+      return null;
+    }
+    try {
+      // Create the full path to assets/images/project_images
+      final projectDir = Directory('assets/images/project_images');
+      print('📁 Creating directory: ${projectDir.path}');
+
+      if (!projectDir.existsSync()) {
+        projectDir.createSync(recursive: true);
+      }
+
+      // Create filename using project_id
+      final fileName = 'project_$projectId.jpg';
+      final filePath = 'assets/images/project_images/$fileName';
+      final fullPath = projectDir.path + Platform.pathSeparator + fileName;
+
+      // Copy the selected image file
+      final sourceFile = File(_selectedImage!.path);
+      print('📸 Source: ${sourceFile.path}');
+      print('📍 Destination: $fullPath');
+
+      await sourceFile.copy(fullPath);
+      print('✓ Image saved successfully!');
+
+      return filePath;
+    } catch (e) {
+      print('❌ Error saving image: $e');
+      return null;
+    }
+  }
+
+  Future<void> _handleSubmit() async {
     if (_formKey.currentState!.validate()) {
-      // Handle form submission
-      Navigator.of(context).pop({
-        'name': _nameController.text,
-        'address': _addressController.text,
-        'projectType': _selectedProjectType,
-        'startDate': _startDateController.text,
-        'endDate': _endDateController.text,
-        'client': _selectedClient,
-        'supervisor': _selectedSupervisor,
-        'budget': _budgetController.text,
-        'image': _selectedImage,
-      });
+      setState(() => _isSubmitting = true);
+
+      try {
+        // Get user_id from auth service
+        final authService = AuthService();
+        final userId = authService.currentUser?['user_id'];
+
+        if (userId == null) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Error: User not logged in'),
+              backgroundColor: Colors.red,
+            ),
+          );
+          setState(() => _isSubmitting = false);
+          return;
+        }
+
+        // Convert dates to YYYY-MM-DD format
+        final startDate = _convertDateFormat(_startDateController.text);
+        final endDate = _convertDateFormat(_endDateController.text);
+
+        // Step 1: Create project WITHOUT image path first
+        final payload = {
+          'project_name': _nameController.text,
+          'description': _descriptionController.text,
+          'street': _streetController.text,
+          'project_type': _selectedProjectType,
+          'start_date': startDate,
+          'end_date': endDate,
+          'client_id': _selectedClientId ?? 1,
+          'supervisor_id': _selectedSupervisorId ?? 1,
+          'budget': double.tryParse(_budgetController.text) ?? 0,
+          'region': _selectedRegionId,
+          'province': _selectedProvinceId,
+          'city': _selectedCityId,
+          'barangay': _selectedBarangayId,
+          'status': 'Planning',
+          'project_image': null,
+          'user_id': userId,
+        };
+
+        print('🚀 Step 1: Creating project without image...');
+        print('Payload: ${jsonEncode(payload)}');
+
+        final response = await http
+            .post(
+              Uri.parse('http://127.0.0.1:8000/api/projects/'),
+              headers: {'Content-Type': 'application/json'},
+              body: jsonEncode(payload),
+            )
+            .timeout(const Duration(seconds: 10));
+
+        print('✓ Response status: ${response.statusCode}');
+        print('✓ Response body: ${response.body}');
+
+        if (!mounted) return;
+
+        if (response.statusCode != 201) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Error: ${response.statusCode} - ${response.body}'),
+              backgroundColor: Colors.red,
+            ),
+          );
+          setState(() => _isSubmitting = false);
+          return;
+        }
+
+        // Step 2: Parse response and get project_id
+        final responseData = jsonDecode(response.body);
+        final projectId = responseData['project_id'];
+        print('✅ Project created with ID: $projectId');
+
+        // Step 3: Save image if selected
+        String? imagePath;
+        if (_selectedImage != null) {
+          print('🚀 Step 2: Saving image file...');
+          imagePath = await _saveImageToAssets(projectId.toString());
+
+          if (imagePath != null) {
+            print('✅ Image saved to: $imagePath');
+
+            // Step 4: Update project with image path
+            print('🚀 Step 3: Updating project with image path...');
+            final updatePayload = {'project_image': imagePath};
+
+            final updateResponse = await http
+                .patch(
+                  Uri.parse('http://127.0.0.1:8000/api/projects/$projectId/'),
+                  headers: {'Content-Type': 'application/json'},
+                  body: jsonEncode(updatePayload),
+                )
+                .timeout(const Duration(seconds: 10));
+
+            print('✓ Update response status: ${updateResponse.statusCode}');
+            print('✓ Update response body: ${updateResponse.body}');
+          }
+        }
+
+        // Step 5: Show success dialog
+        if (!mounted) return;
+
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (BuildContext context) {
+            return Dialog(
+              backgroundColor: Colors.transparent,
+              child: Container(
+                width: 300,
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 80,
+                      height: 80,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFD1FAE5),
+                        borderRadius: BorderRadius.circular(40),
+                      ),
+                      child: const Icon(
+                        Icons.check_circle,
+                        color: Color(0xFF059669),
+                        size: 40,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    const Text(
+                      'New Project Added',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF0C1935),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      '${_nameController.text} has been successfully created.',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        color: Color(0xFF6B7280),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    ElevatedButton(
+                      onPressed: () {
+                        Navigator.of(context).pop();
+                        Navigator.of(context).pop();
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFFFF7A18),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 32,
+                          vertical: 12,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                      child: const Text(
+                        'Done',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+        setState(() => _isSubmitting = false);
+      } catch (e) {
+        print('❌ Error: $e');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Network error: $e'),
+              backgroundColor: Colors.red,
+            ),
+          );
+          setState(() => _isSubmitting = false);
+        }
+      }
     }
   }
 
@@ -103,7 +484,7 @@ class _CreateProjectModalState extends State<CreateProjectModal> {
       backgroundColor: Colors.transparent,
       child: Container(
         width: 600,
-        constraints: const BoxConstraints(maxHeight: 700),
+        constraints: const BoxConstraints(maxHeight: 800),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(16),
@@ -171,10 +552,8 @@ class _CreateProjectModalState extends State<CreateProjectModal> {
                               height: 80,
                               decoration: BoxDecoration(
                                 borderRadius: BorderRadius.circular(8),
-                                image: const DecorationImage(
-                                  image: AssetImage(
-                                    'assets/images/engineer.jpg',
-                                  ),
+                                image: DecorationImage(
+                                  image: FileImage(File(_selectedImage!.path)),
                                   fit: BoxFit.cover,
                                 ),
                               ),
@@ -271,11 +650,12 @@ class _CreateProjectModalState extends State<CreateProjectModal> {
                       ),
                       const SizedBox(height: 12),
 
-                      // Project Address
+                      // Project Description
                       TextFormField(
-                        controller: _addressController,
+                        controller: _descriptionController,
+                        maxLines: 4,
                         decoration: InputDecoration(
-                          hintText: 'Enter Project\'s Address',
+                          hintText: 'Enter Project Description (Optional)',
                           hintStyle: TextStyle(
                             fontSize: 14,
                             color: Colors.grey[400],
@@ -291,12 +671,191 @@ class _CreateProjectModalState extends State<CreateProjectModal> {
                             borderSide: BorderSide(color: Colors.grey[300]!),
                           ),
                         ),
-                        validator: (value) {
-                          if (value == null || value.isEmpty) {
-                            return 'Please enter project address';
+                      ),
+                      const SizedBox(height: 12),
+
+                      // Address - Cascading Dropdowns
+                      const Text(
+                        'Project Address',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF0C1935),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+
+                      // Region Dropdown
+                      _isLoadingRegions
+                          ? const Center(child: CircularProgressIndicator())
+                          : DropdownButtonFormField<int>(
+                              value: _selectedRegionId,
+                              decoration: InputDecoration(
+                                hintText: 'Select Region',
+                                hintStyle: TextStyle(
+                                  fontSize: 14,
+                                  color: Colors.grey[400],
+                                ),
+                                filled: true,
+                                fillColor: const Color(0xFFF9FAFB),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                  borderSide: BorderSide(
+                                    color: Colors.grey[300]!,
+                                  ),
+                                ),
+                                enabledBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                  borderSide: BorderSide(
+                                    color: Colors.grey[300]!,
+                                  ),
+                                ),
+                              ),
+                              items: _regions.map((region) {
+                                return DropdownMenuItem<int>(
+                                  value: region['id'] as int,
+                                  child: Text(region['name'] as String),
+                                );
+                              }).toList(),
+                              onChanged: (int? value) {
+                                if (value != null) {
+                                  setState(() {
+                                    _selectedRegionId = value;
+                                  });
+                                  _fetchProvinces(value);
+                                }
+                              },
+                            ),
+                      const SizedBox(height: 12),
+
+                      // Province Dropdown
+                      DropdownButtonFormField<int>(
+                        value: _selectedProvinceId,
+                        decoration: InputDecoration(
+                          hintText: 'Select Province',
+                          hintStyle: TextStyle(
+                            fontSize: 14,
+                            color: Colors.grey[400],
+                          ),
+                          filled: true,
+                          fillColor: const Color(0xFFF9FAFB),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide: BorderSide(color: Colors.grey[300]!),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide: BorderSide(color: Colors.grey[300]!),
+                          ),
+                        ),
+                        items: _provinces.map((province) {
+                          return DropdownMenuItem<int>(
+                            value: province['id'] as int,
+                            child: Text(province['name'] as String),
+                          );
+                        }).toList(),
+                        onChanged: (int? value) {
+                          if (value != null) {
+                            setState(() {
+                              _selectedProvinceId = value;
+                            });
+                            _fetchCities(value);
                           }
-                          return null;
                         },
+                      ),
+                      const SizedBox(height: 12),
+
+                      // City Dropdown
+                      DropdownButtonFormField<int>(
+                        value: _selectedCityId,
+                        decoration: InputDecoration(
+                          hintText: 'Select City',
+                          hintStyle: TextStyle(
+                            fontSize: 14,
+                            color: Colors.grey[400],
+                          ),
+                          filled: true,
+                          fillColor: const Color(0xFFF9FAFB),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide: BorderSide(color: Colors.grey[300]!),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide: BorderSide(color: Colors.grey[300]!),
+                          ),
+                        ),
+                        items: _cities.map((city) {
+                          return DropdownMenuItem<int>(
+                            value: city['id'] as int,
+                            child: Text(city['name'] as String),
+                          );
+                        }).toList(),
+                        onChanged: (int? value) {
+                          if (value != null) {
+                            setState(() {
+                              _selectedCityId = value;
+                            });
+                            _fetchBarangays(value);
+                          }
+                        },
+                      ),
+                      const SizedBox(height: 12),
+
+                      // Barangay Dropdown
+                      DropdownButtonFormField<int>(
+                        value: _selectedBarangayId,
+                        decoration: InputDecoration(
+                          hintText: 'Select Barangay',
+                          hintStyle: TextStyle(
+                            fontSize: 14,
+                            color: Colors.grey[400],
+                          ),
+                          filled: true,
+                          fillColor: const Color(0xFFF9FAFB),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide: BorderSide(color: Colors.grey[300]!),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide: BorderSide(color: Colors.grey[300]!),
+                          ),
+                        ),
+                        items: _barangays.map((barangay) {
+                          return DropdownMenuItem<int>(
+                            value: barangay['id'] as int,
+                            child: Text(barangay['name'] as String),
+                          );
+                        }).toList(),
+                        onChanged: (int? value) {
+                          setState(() {
+                            _selectedBarangayId = value;
+                          });
+                        },
+                      ),
+                      const SizedBox(height: 12),
+
+                      // Street Address
+                      TextFormField(
+                        controller: _streetController,
+                        decoration: InputDecoration(
+                          hintText: 'Enter Street Address (Optional)',
+                          hintStyle: TextStyle(
+                            fontSize: 14,
+                            color: Colors.grey[400],
+                          ),
+                          filled: true,
+                          fillColor: const Color(0xFFF9FAFB),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide: BorderSide(color: Colors.grey[300]!),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide: BorderSide(color: Colors.grey[300]!),
+                          ),
+                        ),
                       ),
                       const SizedBox(height: 12),
 
@@ -457,71 +1016,98 @@ class _CreateProjectModalState extends State<CreateProjectModal> {
                       const SizedBox(height: 12),
 
                       // Client
-                      DropdownButtonFormField<String>(
-                        value: _selectedClient,
-                        decoration: InputDecoration(
-                          hintText: 'Select client',
-                          hintStyle: TextStyle(
-                            fontSize: 14,
-                            color: Colors.grey[400],
-                          ),
-                          filled: true,
-                          fillColor: const Color(0xFFF9FAFB),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8),
-                            borderSide: BorderSide(color: Colors.grey[300]!),
-                          ),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8),
-                            borderSide: BorderSide(color: Colors.grey[300]!),
-                          ),
-                        ),
-                        items: _clients.map((String client) {
-                          return DropdownMenuItem<String>(
-                            value: client,
-                            child: Text(client),
-                          );
-                        }).toList(),
-                        onChanged: (String? newValue) {
-                          setState(() {
-                            _selectedClient = newValue;
-                          });
-                        },
-                      ),
+                      _isLoadingClients
+                          ? const CircularProgressIndicator()
+                          : DropdownButtonFormField<int>(
+                              value: _selectedClientId,
+                              decoration: InputDecoration(
+                                hintText: 'Select client',
+                                hintStyle: TextStyle(
+                                  fontSize: 14,
+                                  color: Colors.grey[400],
+                                ),
+                                filled: true,
+                                fillColor: const Color(0xFFF9FAFB),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                  borderSide: BorderSide(
+                                    color: Colors.grey[300]!,
+                                  ),
+                                ),
+                                enabledBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                  borderSide: BorderSide(
+                                    color: Colors.grey[300]!,
+                                  ),
+                                ),
+                              ),
+                              items: _clients.map((client) {
+                                final clientId = client['client_id'] as int;
+                                final firstName =
+                                    client['first_name'] as String? ?? '';
+                                final lastName =
+                                    client['last_name'] as String? ?? '';
+                                final displayName = '$firstName $lastName'
+                                    .trim();
+                                return DropdownMenuItem<int>(
+                                  value: clientId,
+                                  child: Text(displayName),
+                                );
+                              }).toList(),
+                              onChanged: (int? newValue) {
+                                setState(() {
+                                  _selectedClientId = newValue;
+                                });
+                              },
+                            ),
                       const SizedBox(height: 12),
 
                       // Supervisor in-charge
-                      DropdownButtonFormField<String>(
-                        value: _selectedSupervisor,
-                        decoration: InputDecoration(
-                          hintText: 'Select supervisor',
-                          hintStyle: TextStyle(
-                            fontSize: 14,
-                            color: Colors.grey[400],
-                          ),
-                          filled: true,
-                          fillColor: const Color(0xFFF9FAFB),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8),
-                            borderSide: BorderSide(color: Colors.grey[300]!),
-                          ),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8),
-                            borderSide: BorderSide(color: Colors.grey[300]!),
-                          ),
-                        ),
-                        items: _supervisors.map((String supervisor) {
-                          return DropdownMenuItem<String>(
-                            value: supervisor,
-                            child: Text(supervisor),
-                          );
-                        }).toList(),
-                        onChanged: (String? newValue) {
-                          setState(() {
-                            _selectedSupervisor = newValue;
-                          });
-                        },
-                      ),
+                      _isLoadingSupervisors
+                          ? const CircularProgressIndicator()
+                          : DropdownButtonFormField<int>(
+                              value: _selectedSupervisorId,
+                              decoration: InputDecoration(
+                                hintText: 'Select supervisor',
+                                hintStyle: TextStyle(
+                                  fontSize: 14,
+                                  color: Colors.grey[400],
+                                ),
+                                filled: true,
+                                fillColor: const Color(0xFFF9FAFB),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                  borderSide: BorderSide(
+                                    color: Colors.grey[300]!,
+                                  ),
+                                ),
+                                enabledBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                  borderSide: BorderSide(
+                                    color: Colors.grey[300]!,
+                                  ),
+                                ),
+                              ),
+                              items: _supervisors.map((supervisor) {
+                                final supervisorId =
+                                    supervisor['supervisor_id'] as int;
+                                final firstName =
+                                    supervisor['first_name'] as String? ?? '';
+                                final lastName =
+                                    supervisor['last_name'] as String? ?? '';
+                                final displayName = '$firstName $lastName'
+                                    .trim();
+                                return DropdownMenuItem<int>(
+                                  value: supervisorId,
+                                  child: Text(displayName),
+                                );
+                              }).toList(),
+                              onChanged: (int? newValue) {
+                                setState(() {
+                                  _selectedSupervisorId = newValue;
+                                });
+                              },
+                            ),
                       const SizedBox(height: 12),
 
                       // Budget
@@ -595,7 +1181,7 @@ class _CreateProjectModalState extends State<CreateProjectModal> {
                   const SizedBox(width: 12),
                   Expanded(
                     child: ElevatedButton(
-                      onPressed: _handleSubmit,
+                      onPressed: _isSubmitting ? null : _handleSubmit,
                       style: ElevatedButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 14),
                         backgroundColor: const Color(0xFFFF7A18),
@@ -603,14 +1189,25 @@ class _CreateProjectModalState extends State<CreateProjectModal> {
                           borderRadius: BorderRadius.circular(8),
                         ),
                       ),
-                      child: const Text(
-                        'Next',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.white,
-                        ),
-                      ),
+                      child: _isSubmitting
+                          ? const SizedBox(
+                              height: 20,
+                              width: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                  Colors.white,
+                                ),
+                              ),
+                            )
+                          : const Text(
+                              'Next',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.white,
+                              ),
+                            ),
                     ),
                   ),
                 ],

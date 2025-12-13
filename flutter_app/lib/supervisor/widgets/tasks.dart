@@ -4,10 +4,10 @@ class Tasks extends StatelessWidget {
   const Tasks({super.key});
 
   final List<Map<String, String>> tasks = const [
-    {"title": "Design user flow for Hiphonic App", "status": "In Progress"},
-    {"title": "Homepage UI for Diphub App", "status": "Completed"},
-    {"title": "Backend integration for Payment Module", "status": "Pending"},
-    {"title": "Prepare presentation slides", "status": "In Review"},
+    {"title": "Site survey, layout, soil test, clear site.", "status": "In Progress"},
+    {"title": "Mobilize equipment, set up temporary facilities (storage, worker quarters).", "status": "Completed"},
+    {"title": "Excavation for foundation.", "status": "Pending"},
+    {"title": "Continue excavation, soil compaction.", "status": "In Review"},
   ];
 
   Color getStatusColor(String status) {

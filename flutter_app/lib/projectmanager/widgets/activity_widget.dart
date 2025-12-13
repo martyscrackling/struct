@@ -34,7 +34,10 @@ class ActivityWidget extends StatelessWidget {
                 ),
               ),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 6,
+                ),
                 decoration: BoxDecoration(
                   color: Colors.grey[100],
                   borderRadius: BorderRadius.circular(6),
@@ -46,13 +49,19 @@ class ActivityWidget extends StatelessWidget {
                       style: TextStyle(fontSize: 13, color: Color(0xFF0C1935)),
                     ),
                     const SizedBox(width: 4),
-                    Icon(Icons.keyboard_arrow_down, size: 16, color: Colors.grey[600]),
+                    Icon(
+                      Icons.keyboard_arrow_down,
+                      size: 16,
+                      color: Colors.grey[600],
+                    ),
                   ],
                 ),
               ),
             ],
           ),
+
           const SizedBox(height: 24),
+
           SizedBox(
             height: 200,
             child: LineChart(
@@ -62,32 +71,47 @@ class ActivityWidget extends StatelessWidget {
                   drawVerticalLine: false,
                   horizontalInterval: 25,
                   getDrawingHorizontalLine: (value) {
-                    return FlLine(
-                      color: Colors.grey[200]!,
-                      strokeWidth: 1,
-                    );
+                    return FlLine(color: Colors.grey[200]!, strokeWidth: 1);
                   },
                 ),
+
                 titlesData: FlTitlesData(
                   show: true,
-                  rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                  topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                  rightTitles: const AxisTitles(
+                    sideTitles: SideTitles(showTitles: false),
+                  ),
+                  topTitles: const AxisTitles(
+                    sideTitles: SideTitles(showTitles: false),
+                  ),
+
                   bottomTitles: AxisTitles(
                     sideTitles: SideTitles(
                       showTitles: true,
                       reservedSize: 30,
                       interval: 1,
                       getTitlesWidget: (double value, TitleMeta meta) {
-                        const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-                        if (value.toInt() >= 0 && value.toInt() < days.length) {
+                        const days = [
+                          'Sun',
+                          'Mon',
+                          'Tue',
+                          'Wed',
+                          'Thu',
+                          'Fri',
+                          'Sat',
+                        ];
+                        if (value >= 0 && value < days.length) {
                           return Padding(
                             padding: const EdgeInsets.only(top: 8.0),
                             child: Text(
                               days[value.toInt()],
                               style: TextStyle(
-                                color: value.toInt() == 3 ? Colors.blue : Colors.grey[600],
+                                color: value.toInt() == 3
+                                    ? Colors.blue
+                                    : Colors.grey[600],
                                 fontSize: 12,
-                                fontWeight: value.toInt() == 3 ? FontWeight.w600 : FontWeight.normal,
+                                fontWeight: value.toInt() == 3
+                                    ? FontWeight.w600
+                                    : FontWeight.normal,
                               ),
                             ),
                           );
@@ -96,6 +120,7 @@ class ActivityWidget extends StatelessWidget {
                       },
                     ),
                   ),
+
                   leftTitles: AxisTitles(
                     sideTitles: SideTitles(
                       showTitles: true,
@@ -113,11 +138,14 @@ class ActivityWidget extends StatelessWidget {
                     ),
                   ),
                 ),
+
                 borderData: FlBorderData(show: false),
+
                 minX: 0,
                 maxX: 6,
                 minY: 0,
                 maxY: 100,
+
                 lineBarsData: [
                   LineChartBarData(
                     spots: const [
@@ -133,6 +161,7 @@ class ActivityWidget extends StatelessWidget {
                     color: Colors.blue,
                     barWidth: 3,
                     isStrokeCapRound: true,
+
                     dotData: FlDotData(
                       show: true,
                       getDotPainter: (spot, percent, barData, index) {
@@ -147,22 +176,22 @@ class ActivityWidget extends StatelessWidget {
                         return FlDotCirclePainter(
                           radius: 3,
                           color: Colors.blue,
-                          strokeWidth: 0,
                         );
                       },
                     ),
                     belowBarData: BarAreaData(show: false),
                   ),
                 ],
+
                 lineTouchData: LineTouchData(
                   enabled: true,
                   touchTooltipData: LineTouchTooltipData(
-                    getTooltipColor: (touchedSpot) => const Color(0xFF0C1935),
-                    getTooltipItems: (List<LineBarSpot> touchedBarSpots) {
-                      return touchedBarSpots.map((barSpot) {
-                        return LineTooltipItem(
+                    tooltipPadding: const EdgeInsets.all(8),
+                    getTooltipItems: (touchedSpots) {
+                      return touchedSpots.map((spot) {
+                        return const LineTooltipItem(
                           '5 tasks\nAnnual completed',
-                          const TextStyle(
+                          TextStyle(
                             color: Colors.white,
                             fontSize: 12,
                             fontWeight: FontWeight.w500,

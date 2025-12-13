@@ -1,11 +1,23 @@
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 import 'widgets/sidebar.dart';
 import 'widgets/dashboard_header.dart';
 import 'modals/add_worker_modal.dart';
 import 'worker_profile_page.dart';
+import 'all_supervisors.dart';
 
-class WorkforcePage extends StatelessWidget {
+class WorkforcePage extends StatefulWidget {
   const WorkforcePage({super.key});
+
+  @override
+  State<WorkforcePage> createState() => _WorkforcePageState();
+}
+
+class _WorkforcePageState extends State<WorkforcePage> {
+  List<WorkerGroup> _groups = [];
+  bool _isLoading = true;
+  String? _error;
 
   static final List<WorkerStat> _workerStats = [
     WorkerStat(
@@ -22,21 +34,63 @@ class WorkforcePage extends StatelessWidget {
     WorkerStat(label: 'Mason', icon: Icons.grass, count: 32),
   ];
 
-  static final List<WorkerGroup> _groups = [
-    WorkerGroup(title: 'Active Supervisors', workers: _buildSampleWorkers()),
-    WorkerGroup(
-      title: 'Active Mason',
-      workers: _buildSampleWorkers(role: 'Mason'),
-    ),
-    WorkerGroup(
-      title: 'Active Painter',
-      workers: _buildSampleWorkers(role: 'Painter'),
-    ),
-    WorkerGroup(
-      title: 'Active Electrician',
-      workers: _buildSampleWorkers(role: 'Electrician'),
-    ),
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _fetchWorkerGroups();
+  }
+
+  Future<void> _fetchWorkerGroups() async {
+    try {
+      // Fetch active supervisors
+      final supervisorResponse = await http.get(
+        Uri.parse('http://127.0.0.1:8000/api/supervisors/'),
+      );
+
+      List<WorkerInfo> activeSupervisors = [];
+
+      if (supervisorResponse.statusCode == 200) {
+        final List<dynamic> supervisors = jsonDecode(supervisorResponse.body);
+        activeSupervisors = supervisors
+            .where((supervisor) => supervisor['status'] == 'active')
+            .map((supervisor) {
+              return WorkerInfo(
+                name: '${supervisor['first_name']} ${supervisor['last_name']}',
+                email: supervisor['email'] ?? 'N/A',
+                phone: supervisor['phone_number'] ?? 'N/A',
+                role: 'Supervisor',
+                avatarUrl: 'https://randomuser.me/api/portraits/men/1.jpg',
+              );
+            })
+            .toList();
+      }
+
+      setState(() {
+        _groups = [
+          WorkerGroup(title: 'Active Supervisors', workers: activeSupervisors),
+          WorkerGroup(
+            title: 'Active Mason',
+            workers: _buildSampleWorkers(role: 'Mason'),
+          ),
+          WorkerGroup(
+            title: 'Active Painter',
+            workers: _buildSampleWorkers(role: 'Painter'),
+          ),
+          WorkerGroup(
+            title: 'Active Electrician',
+            workers: _buildSampleWorkers(role: 'Electrician'),
+          ),
+        ];
+        _isLoading = false;
+      });
+    } catch (e) {
+      print('Error fetching worker groups: $e');
+      setState(() {
+        _error = 'Error loading supervisors: $e';
+        _isLoading = false;
+      });
+    }
+  }
 
   static List<WorkerInfo> _buildSampleWorkers({String role = 'Supervisor'}) {
     return List.generate(
@@ -63,25 +117,52 @@ class WorkforcePage extends StatelessWidget {
               children: [
                 const DashboardHeader(title: 'Workforce'),
                 Expanded(
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 24,
-                      vertical: 24,
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _buildTotals(),
-                        const SizedBox(height: 24),
-                        ..._groups.map(
-                          (group) => Padding(
-                            padding: const EdgeInsets.only(bottom: 32),
-                            child: WorkerGroupSection(group: group),
+                  child: _isLoading
+                      ? const Center(
+                          child: CircularProgressIndicator(
+                            color: Color(0xFFFF7A18),
+                          ),
+                        )
+                      : _error != null
+                      ? Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Icon(
+                                Icons.error_outline,
+                                color: Colors.red,
+                                size: 48,
+                              ),
+                              const SizedBox(height: 16),
+                              Text(
+                                _error!,
+                                style: const TextStyle(
+                                  color: Colors.red,
+                                  fontSize: 16,
+                                ),
+                              ),
+                            ],
+                          ),
+                        )
+                      : SingleChildScrollView(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 24,
+                            vertical: 24,
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _buildTotals(),
+                              const SizedBox(height: 24),
+                              ..._groups.map(
+                                (group) => Padding(
+                                  padding: const EdgeInsets.only(bottom: 32),
+                                  child: WorkerGroupSection(group: group),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                      ],
-                    ),
-                  ),
                 ),
               ],
             ),
@@ -311,7 +392,18 @@ class WorkerGroupSection extends StatelessWidget {
                 side: BorderSide.none,
                 padding: const EdgeInsets.symmetric(vertical: 12),
               ),
-              onPressed: () {},
+              onPressed: () {
+                // Navigate to all supervisors page only if this is the Active Supervisors group
+                if (group.title == 'Active Supervisors') {
+                  Navigator.of(context).push(
+                    PageRouteBuilder(
+                      pageBuilder: (context, animation, secondaryAnimation) =>
+                          const WorkforceSupervisorsPage(),
+                      transitionDuration: Duration.zero,
+                    ),
+                  );
+                }
+              },
               child: const Text(
                 'View all',
                 style: TextStyle(fontWeight: FontWeight.w600),

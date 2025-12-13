@@ -1,12 +1,5 @@
 import 'package:flutter/material.dart';
-import '../dashboard_page.dart';
-import '../projects_page.dart';
-import '../workforce_page.dart';
-import '../clients_page.dart';
-import '../reports_page.dart';
-import '../inventory_page.dart';
-import '../settings_page.dart';
-import '../notification_page.dart';
+import 'package:go_router/go_router.dart';
 
 class Sidebar extends StatefulWidget {
   final String currentPage;
@@ -21,43 +14,31 @@ class _SidebarState extends State<Sidebar> {
   String? hoveredItem;
 
   void _navigateToPage(BuildContext context, String label) {
-    Widget page;
     switch (label) {
       case 'Dashboard':
-        page = const PMDashboardPage();
+        context.go('/dashboard');
         break;
       case 'Projects':
-        page = const ProjectsPage();
+        context.go('/projects');
         break;
       case 'Workforce':
-        page = const WorkforcePage();
+        context.go('/workforce');
         break;
       case 'Clients':
-        page = const ClientsPage();
+        context.go('/clients');
         break;
       case 'Reports':
-        page = ReportsPage();
+        context.go('/reports');
         break;
       case 'Inventory':
-        page = InventoryPage();
-        break;
-      case 'Notifications':
-        page = const NotificationPage();
+        context.go('/inventory');
         break;
       case 'Settings':
-        page = SettingsPage();
+        context.go('/settings');
         break;
       default:
         return;
     }
-    Navigator.pushReplacement(
-      context,
-      PageRouteBuilder(
-        pageBuilder: (context, animation, secondaryAnimation) => page,
-        transitionDuration: Duration.zero,
-        reverseTransitionDuration: Duration.zero,
-      ),
-    );
   }
 
   @override

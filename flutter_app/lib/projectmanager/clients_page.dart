@@ -1,23 +1,54 @@
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 import 'widgets/sidebar.dart';
 import 'widgets/dashboard_header.dart';
 import 'modals/add_client_modal.dart';
 import 'client_profile_page.dart';
 
-class ClientsPage extends StatelessWidget {
+class ClientsPage extends StatefulWidget {
   const ClientsPage({super.key});
 
-  static final List<ClientInfo> _clients = List.generate(
-    8,
-    (index) => ClientInfo(
-      name: 'Khalid Mohammad Ali',
-      company: 'AESTRA Build Corp.',
-      email: 'khalid@gmail.com',
-      phone: '092645115471',
-      location: 'Zamboanga City, PH',
-      avatarUrl: 'https://randomuser.me/api/portraits/men/${index + 10}.jpg',
-    ),
-  );
+  @override
+  State<ClientsPage> createState() => _ClientsPageState();
+}
+
+class _ClientsPageState extends State<ClientsPage> {
+  late Future<List<ClientInfo>> _clientsFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _clientsFuture = _fetchClients();
+  }
+
+  Future<List<ClientInfo>> _fetchClients() async {
+    try {
+      final response = await http.get(
+        Uri.parse('http://127.0.0.1:8000/api/clients/'),
+      );
+
+      if (response.statusCode == 200) {
+        final List<dynamic> data = jsonDecode(response.body);
+        return data.map((client) {
+          return ClientInfo(
+            id: client['client_id'],
+            name: '${client['first_name']} ${client['last_name']}',
+            company: 'AESTRA Build Corp.',
+            email: client['email'],
+            phone: client['phone_number'],
+            location: 'Philippines',
+            avatarUrl: 'https://randomuser.me/api/portraits/men/1.jpg',
+          );
+        }).toList();
+      } else {
+        throw Exception('Failed to load clients');
+      }
+    } catch (e) {
+      print('Error fetching clients: $e');
+      return [];
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -41,7 +72,30 @@ class ClientsPage extends StatelessWidget {
                       children: [
                         _ClientsHeader(),
                         const SizedBox(height: 24),
-                        _ActiveClientsSection(clients: _clients),
+                        FutureBuilder<List<ClientInfo>>(
+                          future: _clientsFuture,
+                          builder: (context, snapshot) {
+                            if (snapshot.connectionState ==
+                                ConnectionState.waiting) {
+                              return const Center(
+                                child: CircularProgressIndicator(),
+                              );
+                            } else if (snapshot.hasError) {
+                              return Center(
+                                child: Text('Error: ${snapshot.error}'),
+                              );
+                            } else if (!snapshot.hasData ||
+                                snapshot.data!.isEmpty) {
+                              return const Center(
+                                child: Text('No clients found'),
+                              );
+                            } else {
+                              return _ActiveClientsSection(
+                                clients: snapshot.data!,
+                              );
+                            }
+                          },
+                        ),
                       ],
                     ),
                   ),
@@ -306,6 +360,7 @@ class ClientCard extends StatelessWidget {
 
 class ClientInfo {
   const ClientInfo({
+    this.id,
     required this.name,
     required this.company,
     required this.email,
@@ -314,6 +369,7 @@ class ClientInfo {
     required this.avatarUrl,
   });
 
+  final int? id;
   final String name;
   final String company;
   final String email;
