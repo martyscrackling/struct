@@ -4,6 +4,7 @@ import 'widgets/dashboard_header.dart';
 import 'clients_page.dart';
 import 'modals/view_edit_client_modal.dart';
 
+
 class ClientProject {
   final String projectName;
   final String location;

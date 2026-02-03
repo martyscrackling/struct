@@ -23,8 +23,11 @@ class _AddWorkerModalState extends State<AddWorkerModal> {
   final _birthdateController = TextEditingController();
   final _generatedEmailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _sssIdController = TextEditingController();
+  final _philHealthIdController = TextEditingController();
+  final _pagIbigIdController = TextEditingController();
+  final _payrateController = TextEditingController();
 
-  String _selectedStatus = 'active';
   XFile? _selectedImage;
   bool _isLoading = false;
 
@@ -52,6 +55,10 @@ class _AddWorkerModalState extends State<AddWorkerModal> {
     _birthdateController.dispose();
     _generatedEmailController.dispose();
     _passwordController.dispose();
+    _sssIdController.dispose();
+    _philHealthIdController.dispose();
+    _pagIbigIdController.dispose();
+    _payrateController.dispose();
     super.dispose();
   }
 
@@ -89,25 +96,31 @@ class _AddWorkerModalState extends State<AddWorkerModal> {
       });
 
       try {
-        // Get the current logged-in user's ID from AuthService
-        final authService = Provider.of<AuthService>(context, listen: false);
-        final userId = authService.currentUser?['user_id'];
-
-        final supervisorData = {
-          'user_id': userId, // Include the currently logged-in user's ID
+        // Build payload with ALL fields including optional ones
+        final Map<String, dynamic> supervisorData = {
           'first_name': _firstNameController.text.trim(),
           'middle_name': _middleNameController.text.trim().isEmpty
               ? null
               : _middleNameController.text.trim(),
           'last_name': _lastNameController.text.trim(),
           'email': _generatedEmailController.text.trim(),
-          'password_hash': _passwordController.text
-              .trim(), // Include password for hashing
+          'password_hash': _passwordController.text.trim(),
           'phone_number': _phoneNumberController.text.trim(),
           'birthdate': _birthdateController.text.trim().isEmpty
               ? null
               : _birthdateController.text.trim(),
-          'status': _selectedStatus,
+          'sss_id': _sssIdController.text.trim().isEmpty
+              ? null
+              : _sssIdController.text.trim(),
+          'philhealth_id': _philHealthIdController.text.trim().isEmpty
+              ? null
+              : _philHealthIdController.text.trim(),
+          'pagibig_id': _pagIbigIdController.text.trim().isEmpty
+              ? null
+              : _pagIbigIdController.text.trim(),
+          'payrate': _payrateController.text.trim().isEmpty
+              ? null
+              : double.tryParse(_payrateController.text.trim()),
         };
 
         print('Sending supervisor data: $supervisorData');
@@ -122,31 +135,53 @@ class _AddWorkerModalState extends State<AddWorkerModal> {
         print('Response body: ${response.body}');
 
         if (response.statusCode == 201 || response.statusCode == 200) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Supervisor added successfully!')),
-          );
-          Navigator.of(context).pop();
-        } else {
-          try {
-            final errorData = jsonDecode(response.body);
-            final errorMessage =
-                errorData['detail'] ??
-                errorData['error'] ??
-                errorData.toString() ??
-                'Failed to add supervisor';
-            ScaffoldMessenger.of(
-              context,
-            ).showSnackBar(SnackBar(content: Text('Error: $errorMessage')));
-          } catch (e) {
+          if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Error: Failed to add supervisor')),
+              const SnackBar(
+                content: Text('Supervisor added successfully!'),
+                backgroundColor: Colors.green,
+              ),
+            );
+            Navigator.of(context).pop(true);
+          }
+        } else {
+          String errorMsg = 'Failed to add supervisor';
+          try {
+            // Try to parse error response
+            final errorData = jsonDecode(response.body);
+            if (errorData is Map) {
+              final errors = <String>[];
+              errorData.forEach((key, value) {
+                if (value is List) {
+                  errors.add('$key: ${value.join(", ")}');
+                } else {
+                  errors.add('$key: $value');
+                }
+              });
+              if (errors.isNotEmpty) {
+                errorMsg = errors.join(' | ');
+              }
+            }
+          } catch (e) {
+            errorMsg = 'HTTP ${response.statusCode}: ${response.body}';
+          }
+
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Error: $errorMsg'),
+                backgroundColor: Colors.red,
+                duration: const Duration(seconds: 5),
+              ),
             );
           }
         }
       } catch (e) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Error: $e')));
+        if (mounted) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text('Error: $e')));
+        }
       } finally {
         setState(() {
           _isLoading = false;
@@ -346,60 +381,35 @@ class _AddWorkerModalState extends State<AddWorkerModal> {
                             ),
                             const SizedBox(height: 16),
 
-                            // Status Dropdown
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Text(
-                                  'Status',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w600,
-                                    color: Color(0xFF6B7280),
-                                  ),
-                                ),
-                                const SizedBox(height: 8),
-                                Container(
-                                  width: double.infinity,
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 12,
-                                    vertical: 4,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFFF9FAFB),
-                                    border: Border.all(
-                                      color: Colors.grey[300]!,
-                                    ),
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: DropdownButtonHideUnderline(
-                                    child: DropdownButton<String>(
-                                      value: _selectedStatus,
-                                      isExpanded: true,
-                                      items: const [
-                                        DropdownMenuItem(
-                                          value: 'active',
-                                          child: Text('Active'),
-                                        ),
-                                        DropdownMenuItem(
-                                          value: 'deactivated',
-                                          child: Text('Deactivated'),
-                                        ),
-                                        DropdownMenuItem(
-                                          value: 'fired',
-                                          child: Text('Fired'),
-                                        ),
-                                      ],
-                                      onChanged: (value) {
-                                        setState(() {
-                                          _selectedStatus = value ?? 'active';
-                                        });
-                                      },
-                                    ),
-                                  ),
-                                ),
-                              ],
+                            // SSS ID
+                            _buildTextField(
+                              controller: _sssIdController,
+                              hintText: 'SSS ID (Optional)',
                             ),
+                            const SizedBox(height: 16),
+
+                            // PhilHealth ID
+                            _buildTextField(
+                              controller: _philHealthIdController,
+                              hintText: 'PhilHealth ID (Optional)',
+                            ),
+                            const SizedBox(height: 16),
+
+                            // PagIbig ID
+                            _buildTextField(
+                              controller: _pagIbigIdController,
+                              hintText: 'PagIbig ID (Optional)',
+                            ),
+                            const SizedBox(height: 16),
+
+                            // Payrate
+                            _buildTextField(
+                              controller: _payrateController,
+                              hintText: 'Payrate (Optional)',
+                              keyboardType: TextInputType.number,
+                            ),
+                            const SizedBox(height: 16),
+
                             const SizedBox(height: 24),
 
                             // Add Button
@@ -429,7 +439,7 @@ class _AddWorkerModalState extends State<AddWorkerModal> {
                                         ),
                                       )
                                     : const Text(
-                                        'Add Supervisor',
+                                        'Add Worker',
                                         style: TextStyle(
                                           fontSize: 14,
                                           fontWeight: FontWeight.w600,

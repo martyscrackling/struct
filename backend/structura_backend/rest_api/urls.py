@@ -10,7 +10,13 @@ from .views import (
     BarangayViewSet,
     ProjectViewSet,
     SupervisorViewSet,
+    SupervisorsViewSet,
+    FieldWorkerViewSet,
     ClientViewSet,
+    PhaseViewSet,
+    SubtaskViewSet,
+    SubtaskFieldWorkerViewSet,
+    AttendanceViewSet,
     debug_projects,
     debug_all_data
 )
@@ -21,8 +27,13 @@ router.register(r'provinces', ProvinceViewSet, basename='province')
 router.register(r'cities', CityViewSet, basename='city')
 router.register(r'barangays', BarangayViewSet, basename='barangay')
 router.register(r'projects', ProjectViewSet, basename='project')
-router.register(r'supervisors', SupervisorViewSet, basename='supervisor')
+router.register(r'supervisors', SupervisorsViewSet, basename='supervisors')
+router.register(r'field-workers', FieldWorkerViewSet, basename='fieldworker')
 router.register(r'clients', ClientViewSet, basename='client')
+router.register(r'phases', PhaseViewSet, basename='phase')
+router.register(r'subtasks', SubtaskViewSet, basename='subtask')
+router.register(r'subtask-assignments', SubtaskFieldWorkerViewSet, basename='subtask-assignment')
+router.register(r'attendance', AttendanceViewSet, basename='attendance')
 
 urlpatterns = [
     path('', include(router.urls)),

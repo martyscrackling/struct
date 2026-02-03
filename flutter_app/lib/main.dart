@@ -14,12 +14,28 @@ import 'projectmanager/reports_page.dart';
 import 'projectmanager/inventory_page.dart';
 import 'projectmanager/settings_page.dart';
 import 'supervisor/dashboard_page.dart' as supervisor;
+import 'supervisor/workers_management.dart' as supervisor;
+import 'supervisor/attendance_page.dart' as supervisor;
+import 'supervisor/daily_logs.dart' as supervisor;
+import 'supervisor/task_progress.dart' as supervisor;
+import 'supervisor/reports.dart' as supervisor;
+import 'supervisor/inventory.dart' as supervisor;
 import 'client/cl_dashboard.dart' as client;
 import 'license/plan.dart';
 import 'services/auth_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Suppress harmless DevTools web warnings
+  FlutterError.onError = (FlutterErrorDetails details) {
+    if (details.exception.toString().contains('ext.flutter') ||
+        details.exception.toString().contains('activeDevToolsServerAddress') ||
+        details.exception.toString().contains('connectedVmServiceUri')) {
+      return; // Suppress these harmless warnings
+    }
+    FlutterError.presentError(details);
+  };
 
   await Supabase.initialize(
     url: 'https://prokngxytawscbszbnxc.supabase.co',
@@ -110,6 +126,39 @@ class StructuraApp extends StatelessWidget {
           builder: (context, state) =>
               const supervisor.SupervisorDashboardPage(),
           name: 'supervisor',
+          routes: [
+            GoRoute(
+              path: 'workers',
+              builder: (context, state) =>
+                  const supervisor.WorkerManagementPage(),
+              name: 'supervisor-workers',
+            ),
+            GoRoute(
+              path: 'attendance',
+              builder: (context, state) => const supervisor.AttendancePage(),
+              name: 'supervisor-attendance',
+            ),
+            GoRoute(
+              path: 'daily-logs',
+              builder: (context, state) => const supervisor.DailyLogsPage(),
+              name: 'supervisor-daily-logs',
+            ),
+            GoRoute(
+              path: 'task-progress',
+              builder: (context, state) => const supervisor.TaskProgressPage(),
+              name: 'supervisor-task-progress',
+            ),
+            GoRoute(
+              path: 'reports',
+              builder: (context, state) => const supervisor.ReportsPage(),
+              name: 'supervisor-reports',
+            ),
+            GoRoute(
+              path: 'inventory',
+              builder: (context, state) => const supervisor.InventoryPage(),
+              name: 'supervisor-inventory',
+            ),
+          ],
         ),
         GoRoute(
           path: '/client',

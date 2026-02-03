@@ -26,6 +26,41 @@ class _ProjectsPageState extends State<ProjectsPage> {
     _fetchProjects();
   }
 
+  // Calculate progress based on subtasks (matching task_progress.dart)
+  Future<double> _calculateProjectProgress(int projectId) async {
+    try {
+      final response = await http.get(
+        Uri.parse('http://127.0.0.1:8000/api/phases/?project_id=$projectId'),
+      );
+
+      if (response.statusCode == 200) {
+        final List<dynamic> phases = jsonDecode(response.body);
+
+        int totalSubtasks = 0;
+        int completedSubtasks = 0;
+
+        for (var phase in phases) {
+          final phaseMap = phase as Map<String, dynamic>;
+          final List<dynamic> subtasks = phaseMap['subtasks'] ?? [];
+
+          totalSubtasks += subtasks.length;
+          for (var subtask in subtasks) {
+            final subtaskMap = subtask as Map<String, dynamic>;
+            if (subtaskMap['status'] == 'completed') {
+              completedSubtasks++;
+            }
+          }
+        }
+
+        if (totalSubtasks == 0) return 0.0;
+        return completedSubtasks / totalSubtasks;
+      }
+    } catch (e) {
+      print('⚠️ Error calculating progress for project $projectId: $e');
+    }
+    return 0.0;
+  }
+
   Future<void> _fetchProjects() async {
     try {
       final authService = AuthService();
@@ -55,49 +90,30 @@ class _ProjectsPageState extends State<ProjectsPage> {
         final List<dynamic> data = jsonDecode(response.body);
         print('📊 Projects fetched: ${data.length}');
 
-        setState(() {
-          _projects = data.map((project) {
-            try {
-              print('📌 Processing project: ${project['project_name']}');
+        // Process projects and calculate progress from phases/subtasks
+        List<ProjectOverviewData> projects = [];
+        for (var project in data) {
+          try {
+            print('📌 Processing project: ${project['project_name']}');
 
-              // Safely convert all fields
-              final int projectId = (project['project_id'] as int?) ?? 0;
-              final String projectName =
-                  (project['project_name'] as String?) ?? 'Unknown';
-              final String status =
-                  (project['status'] as String?) ?? 'Planning';
-              final String startDateStr =
-                  (project['start_date'] as String?) ?? '';
-              final String endDateStr = (project['end_date'] as String?) ?? '';
-              final String budget = (project['budget']?.toString()) ?? '0';
-              final String createdAt = (project['created_at'] as String?) ?? '';
+            // Safely convert all fields
+            final int projectId = (project['project_id'] as int?) ?? 0;
+            final String projectName =
+                (project['project_name'] as String?) ?? 'Unknown';
+            final String status = (project['status'] as String?) ?? 'Planning';
+            final String startDateStr =
+                (project['start_date'] as String?) ?? '';
+            final String endDateStr = (project['end_date'] as String?) ?? '';
+            final String budget = (project['budget']?.toString()) ?? '0';
+            final String createdAt = (project['created_at'] as String?) ?? '';
 
-              print('✅ Project ID: $projectId, Name: $projectName');
+            print('✅ Project ID: $projectId, Name: $projectName');
 
-              // Calculate progress
-              DateTime startDate = DateTime.now();
-              DateTime endDate = DateTime.now().add(const Duration(days: 30));
+            // Calculate progress based on subtasks (matching task_progress.dart)
+            final progress = await _calculateProjectProgress(projectId);
 
-              try {
-                if (startDateStr.isNotEmpty) {
-                  startDate = DateTime.parse(startDateStr);
-                }
-                if (endDateStr.isNotEmpty) {
-                  endDate = DateTime.parse(endDateStr);
-                }
-              } catch (e) {
-                print('⚠️ Date parsing error: $e');
-              }
-
-              final today = DateTime.now();
-              final totalDays = endDate.difference(startDate).inDays;
-              final elapsedDays = today.difference(startDate).inDays;
-
-              // Calculate progress: 0% if project hasn't started yet
-              final progress = (totalDays > 0 && elapsedDays > 0)
-                  ? (elapsedDays / totalDays).clamp(0.0, 1.0)
-                  : 0.0;
-              return ProjectOverviewData(
+            projects.add(
+              ProjectOverviewData(
                 projectId: projectId,
                 title: projectName,
                 status: status,
@@ -109,12 +125,15 @@ class _ProjectsPageState extends State<ProjectsPage> {
                 image: _getProjectImage(project),
                 budget: budget,
                 createdAt: createdAt,
-              );
-            } catch (e) {
-              print('❌ Error processing project: $e');
-              rethrow;
-            }
-          }).toList();
+              ),
+            );
+          } catch (e) {
+            print('❌ Error processing project: $e');
+          }
+        }
+
+        setState(() {
+          _projects = projects;
 
           // Sort projects by created_at (newest to oldest, with date and time)
           _projects.sort((a, b) {

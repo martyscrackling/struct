@@ -13,13 +13,13 @@ class Tasks extends StatelessWidget {
   Color getStatusColor(String status) {
     switch (status) {
       case "Completed":
-        return const Color(0xFF6CBA63);
+        return const Color.fromARGB(255, 31, 240, 4); // Grey
       case "In Progress":
-        return const Color(0xFF1396E9);
+        return const Color(0xFFFF6F00); // Orange
       case "Pending":
-        return const Color(0xFFFFA726);
+        return const Color.fromARGB(255, 253, 207, 1); // Light Grey
       case "In Review":
-        return const Color(0xFF8E44AD);
+        return const Color(0xFFFF8F00); // Light Orange
       default:
         return Colors.grey;
     }
@@ -85,7 +85,7 @@ class Tasks extends StatelessWidget {
                   onPressed: () {},
                   child: const Text(
                     "View all",
-                    style: TextStyle(fontSize: 13, color: Color(0xFF1396E9)),
+                    style: TextStyle(fontSize: 13, color: Color(0xFFFF6F00)),
                   ),
                 ),
               ],

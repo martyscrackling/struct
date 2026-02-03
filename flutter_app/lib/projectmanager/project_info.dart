@@ -3,6 +3,7 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'widgets/sidebar.dart';
 import 'widgets/dashboard_header.dart';
+import 'project_details_page.dart' as task_details;
 
 class ProjectDetailsPage extends StatefulWidget {
   final String projectTitle;
@@ -29,6 +30,8 @@ class ProjectDetailsPage extends StatefulWidget {
 class _ProjectDetailsPageState extends State<ProjectDetailsPage> {
   Map<String, dynamic>? _clientInfo;
   Map<String, dynamic>? _supervisorInfo;
+  Map<String, dynamic>? _projectInfo;
+  List<dynamic>? _phases;
   bool _isLoading = true;
   String? _error;
 
@@ -36,6 +39,31 @@ class _ProjectDetailsPageState extends State<ProjectDetailsPage> {
   void initState() {
     super.initState();
     _fetchProjectDetails();
+  }
+
+  // Calculate overall project progress based on phases (matching task_progress.dart)
+  double _calculateProjectProgress() {
+    if (_phases == null || _phases!.isEmpty) return 0.0;
+
+    // Count all subtasks across all phases
+    int totalSubtasks = 0;
+    int completedSubtasks = 0;
+
+    for (var phase in _phases!) {
+      final phaseMap = phase as Map<String, dynamic>;
+      final List<dynamic> subtasks = phaseMap['subtasks'] ?? [];
+
+      totalSubtasks += subtasks.length;
+      for (var subtask in subtasks) {
+        final subtaskMap = subtask as Map<String, dynamic>;
+        if (subtaskMap['status'] == 'completed') {
+          completedSubtasks++;
+        }
+      }
+    }
+
+    if (totalSubtasks == 0) return 0.0;
+    return completedSubtasks / totalSubtasks;
   }
 
   Future<void> _fetchProjectDetails() async {
@@ -54,8 +82,12 @@ class _ProjectDetailsPageState extends State<ProjectDetailsPage> {
       }
 
       final projectData = jsonDecode(projectResponse.body);
-      final clientId = projectData['client_id'];
-      final supervisorId = projectData['supervisor_id'];
+      final clientId = projectData['client'];
+      final supervisorId = projectData['supervisor'];
+
+      setState(() {
+        _projectInfo = projectData;
+      });
 
       print('🔍 Project ID: ${widget.projectId}');
       print('🔍 Client ID: $clientId');
@@ -81,18 +113,47 @@ class _ProjectDetailsPageState extends State<ProjectDetailsPage> {
       // Fetch supervisor information
       if (supervisorId != null) {
         try {
+          print('🔍 Attempting to fetch supervisor with ID: $supervisorId');
           final supervisorResponse = await http.get(
             Uri.parse('http://127.0.0.1:8000/api/supervisors/$supervisorId/'),
           );
+          print(
+            '📡 Supervisor response status: ${supervisorResponse.statusCode}',
+          );
+          print('📡 Supervisor response body: ${supervisorResponse.body}');
+
           if (supervisorResponse.statusCode == 200) {
             setState(() {
               _supervisorInfo = jsonDecode(supervisorResponse.body);
               print('✅ Supervisor info fetched: ${_supervisorInfo?['email']}');
             });
+          } else {
+            print(
+              '❌ Failed to fetch supervisor: ${supervisorResponse.statusCode}',
+            );
           }
         } catch (e) {
           print('⚠️ Error fetching supervisor: $e');
         }
+      } else {
+        print('⚠️ No supervisor_id found in project data');
+      }
+
+      // Fetch phases for accurate progress calculation
+      try {
+        final phasesResponse = await http.get(
+          Uri.parse(
+            'http://127.0.0.1:8000/api/phases/?project_id=${widget.projectId}',
+          ),
+        );
+        if (phasesResponse.statusCode == 200) {
+          setState(() {
+            _phases = jsonDecode(phasesResponse.body) as List<dynamic>;
+            print('✅ Phases fetched: ${_phases?.length ?? 0} phases');
+          });
+        }
+      } catch (e) {
+        print('⚠️ Error fetching phases: $e');
       }
 
       setState(() {
@@ -191,9 +252,9 @@ class _ProjectDetailsPageState extends State<ProjectDetailsPage> {
                         Align(
                           alignment: Alignment.centerRight,
                           child: Text(
-                            "${(widget.progress * 100).round()}%",
+                            "${(_calculateProjectProgress() * 100).round()}%",
                             style: TextStyle(
-                              fontSize: 14,
+                              fontSize: 16,
                               fontWeight: FontWeight.bold,
                               color: Colors.red[400],
                             ),
@@ -202,7 +263,7 @@ class _ProjectDetailsPageState extends State<ProjectDetailsPage> {
 
                         // Progress bar
                         LinearProgressIndicator(
-                          value: widget.progress,
+                          value: _calculateProjectProgress(),
                           minHeight: 8,
                           borderRadius: BorderRadius.circular(20),
                           backgroundColor: Colors.grey[300],
@@ -212,6 +273,42 @@ class _ProjectDetailsPageState extends State<ProjectDetailsPage> {
                         ),
 
                         const SizedBox(height: 30),
+
+                        // Project Details Cards
+                        Row(
+                          children: [
+                            Expanded(
+                              child: _projectDetailCard(
+                                icon: Icons.calendar_today,
+                                title: 'Duration',
+                                value: _projectInfo != null
+                                    ? '${_projectInfo!['duration_days'] ?? 'N/A'} days'
+                                    : 'Loading...',
+                                color: const Color(0xFF2196F3),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: _projectDetailCard(
+                                icon: Icons.event,
+                                title: 'Start Date',
+                                value: _projectInfo?['start_date'] ?? 'N/A',
+                                color: const Color(0xFF4CAF50),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: _projectDetailCard(
+                                icon: Icons.event_available,
+                                title: 'End Date',
+                                value: _projectInfo?['end_date'] ?? 'N/A',
+                                color: const Color(0xFFF44336),
+                              ),
+                            ),
+                          ],
+                        ),
+
+                        const SizedBox(height: 24),
 
                         // Client & Supervisor Cards
                         Row(
@@ -315,7 +412,7 @@ class _ProjectDetailsPageState extends State<ProjectDetailsPage> {
                           child: Column(
                             children: [
                               Text(
-                                "No plans yet",
+                                "",
                                 style: TextStyle(
                                   fontSize: 15,
                                   color: Colors.grey.shade700,
@@ -323,7 +420,23 @@ class _ProjectDetailsPageState extends State<ProjectDetailsPage> {
                               ),
                               const SizedBox(height: 16),
                               ElevatedButton(
-                                onPressed: () {},
+                                onPressed: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) =>
+                                          task_details.ProjectTaskDetailsPage(
+                                            projectTitle: widget.projectTitle,
+                                            projectLocation:
+                                                widget.projectLocation,
+                                            projectImage: widget.projectImage,
+                                            progress: widget.progress,
+                                            budget: widget.budget,
+                                            projectId: widget.projectId,
+                                          ),
+                                    ),
+                                  );
+                                },
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: Colors.black,
                                   padding: const EdgeInsets.symmetric(
@@ -347,6 +460,64 @@ class _ProjectDetailsPageState extends State<ProjectDetailsPage> {
                   ),
                 ),
               ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _projectDetailCard({
+    required IconData icon,
+    required String title,
+    required String value,
+    required Color color,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.shade200),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: color.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(icon, color: color, size: 20),
+              ),
+              const SizedBox(width: 10),
+              Text(
+                title,
+                style: TextStyle(
+                  fontSize: 13,
+                  color: Colors.grey.shade600,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            value,
+            style: const TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: Colors.black87,
             ),
           ),
         ],
@@ -410,8 +581,11 @@ class _ProjectDetailsPageState extends State<ProjectDetailsPage> {
               children: [
                 CircleAvatar(
                   radius: 26,
-                  backgroundImage: const AssetImage(
-                    "assets/images/profile.jpg",
+                  backgroundColor: const Color(0xFFE8F5E9),
+                  child: const Icon(
+                    Icons.person,
+                    size: 26,
+                    color: Color(0xFF10B981),
                   ),
                 ),
                 const SizedBox(width: 12),

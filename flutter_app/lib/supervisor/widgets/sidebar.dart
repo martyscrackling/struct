@@ -1,21 +1,20 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 // Import your pages
 import '../dashboard_page.dart';
 import '../workers_management.dart';
 import '../attendance_page.dart';
-import '../daily_logs.dart'; // added import for Daily Logs
-import '../task_progress.dart'; // added import for Task Progress
-import '../reports.dart'; // added import for Reports
-import '../inventory.dart'; // add Inventory page import
+import '../daily_logs.dart';
+import '../task_progress.dart';
+import '../reports.dart';
+import '../inventory.dart';
 
 class Sidebar extends StatefulWidget {
   final String activePage;
+  final bool? keepVisible;
 
-  const Sidebar({
-    super.key,
-    this.activePage = "Dashboard",
-  });
+  const Sidebar({super.key, this.activePage = "Dashboard", this.keepVisible});
 
   @override
   State<Sidebar> createState() => _SidebarState();
@@ -26,38 +25,36 @@ class _SidebarState extends State<Sidebar> {
 
   // Navigation function
   void navigateToPage(String label) {
-    Widget page;
+    // Close drawer/sidebar on navigation
+    if (Navigator.canPop(context)) {
+      Navigator.pop(context);
+    }
 
     switch (label) {
       case "Dashboard":
-        page = const SupervisorDashboardPage();
+        context.go('/supervisor');
         break;
       case "Worker Management":
-        page = const WorkerManagementPage();
+        context.go('/supervisor/workers');
         break;
       case "Attendance":
-        page = const AttendancePage();
+        context.go('/supervisor/attendance');
         break;
       case "Daily Logs":
-        page = const DailyLogsPage(); // now navigates to DailyLogsPage
+        context.go('/supervisor/daily-logs');
         break;
       case "Task Progress":
-        page = const TaskProgressPage();
+        context.go('/supervisor/task-progress');
         break;
       case "Reports":
-        page = const ReportsPage();
+        context.go('/supervisor/reports');
         break;
       case "Inventory":
-        page = const InventoryPage();
+        context.go('/supervisor/inventory');
         break;
       default:
-        page = const SupervisorDashboardPage();
+        context.go('/supervisor');
     }
-
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(builder: (_) => page),
-    );
   }
 
   @override
@@ -82,7 +79,10 @@ class _SidebarState extends State<Sidebar> {
     return Container(
       width: sidebarWidth,
       color: const Color(0xFF0C1935),
-      padding: EdgeInsets.symmetric(vertical: verticalPadding, horizontal: horizontalPadding),
+      padding: EdgeInsets.symmetric(
+        vertical: verticalPadding,
+        horizontal: horizontalPadding,
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -92,7 +92,9 @@ class _SidebarState extends State<Sidebar> {
               Container(
                 width: 50,
                 height: 50,
-                decoration: BoxDecoration(borderRadius: BorderRadius.circular(6)),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(6),
+                ),
                 child: Image.asset(
                   'assets/images/structuralogo.png',
                   fit: BoxFit.contain,
@@ -120,9 +122,12 @@ class _SidebarState extends State<Sidebar> {
                 bool isHovered = hoveredItem == item["label"];
 
                 return Padding(
-                  padding: const EdgeInsets.symmetric(vertical: tileVerticalPadding),
+                  padding: const EdgeInsets.symmetric(
+                    vertical: tileVerticalPadding,
+                  ),
                   child: MouseRegion(
-                    onEnter: (_) => setState(() => hoveredItem = item["label"] as String),
+                    onEnter: (_) =>
+                        setState(() => hoveredItem = item["label"] as String),
                     onExit: (_) => setState(() => hoveredItem = null),
                     child: AnimatedContainer(
                       duration: const Duration(milliseconds: 180),
@@ -130,24 +135,32 @@ class _SidebarState extends State<Sidebar> {
                         color: isActive
                             ? const Color(0xFFE8F3FF)
                             : isHovered
-                                ? Colors.white10
-                                : Colors.transparent,
+                            ? Colors.white10
+                            : Colors.transparent,
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: ListTile(
                         dense: true,
                         minVerticalPadding: 0,
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 6),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                        ),
                         leading: Icon(
                           item["icon"] as IconData,
-                          color: isActive ? const Color(0xFF1396E9) : Colors.white70,
+                          color: isActive
+                              ? const Color(0xFF1396E9)
+                              : Colors.white70,
                           size: iconSize,
                         ),
                         title: Text(
                           item["label"] as String,
                           style: TextStyle(
-                            color: isActive ? const Color(0xFF1396E9) : Colors.white70,
-                            fontWeight: isActive ? FontWeight.w700 : FontWeight.w400,
+                            color: isActive
+                                ? const Color(0xFF1396E9)
+                                : Colors.white70,
+                            fontWeight: isActive
+                                ? FontWeight.w700
+                                : FontWeight.w400,
                             fontSize: fontSize,
                           ),
                         ),
@@ -170,7 +183,9 @@ class _SidebarState extends State<Sidebar> {
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 180),
                 decoration: BoxDecoration(
-                  color: hoveredItem == "Settings" ? Colors.white10 : Colors.transparent,
+                  color: hoveredItem == "Settings"
+                      ? Colors.white10
+                      : Colors.transparent,
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: IconButton(

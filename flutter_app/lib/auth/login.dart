@@ -308,14 +308,14 @@ class _LoginPageState extends State<LoginPage> {
                   Navigator.pop(context); // Close loading dialog
 
                   if (loginSuccess) {
-                    // Get the user type to determine navigation
-                    final userType = authService.currentUser?['type'];
-                    print('Login successful. User type: $userType');
+                    // Get the user role to determine navigation
+                    final userRole = authService.currentUser?['role'];
+                    print('Login successful. User role: $userRole');
 
-                    if (userType == 'supervisor') {
+                    if (userRole == 'Supervisor') {
                       // Navigate to Supervisor Dashboard
                       context.go('/supervisor');
-                    } else if (userType == 'client') {
+                    } else if (userRole == 'Client') {
                       // Navigate to Client Dashboard
                       context.go('/client');
                     } else {

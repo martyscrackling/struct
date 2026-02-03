@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 
 class DashboardHeader extends StatefulWidget {
-  const DashboardHeader({super.key});
+  final VoidCallback? onMenuPressed;
+  const DashboardHeader({super.key, this.onMenuPressed});
 
   @override
-  State<DashboardHeader> createState() => _DashboardHeaderState();
+State<DashboardHeader> createState() => _DashboardHeaderState();
 }
 
 class _DashboardHeaderState extends State<DashboardHeader> {
@@ -12,11 +13,23 @@ class _DashboardHeaderState extends State<DashboardHeader> {
 
   @override
   Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isMobile = screenWidth <= 600;
+    
     return Container(
       color: Colors.white,
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
       child: Row(
         children: [
+          // Hamburger menu button (hidden on mobile)
+          if (!isMobile) ...[
+            IconButton(
+              icon: const Icon(Icons.menu, color: Color(0xFF0C1935)),
+              onPressed: widget.onMenuPressed,
+              tooltip: 'Menu',
+            ),
+            const SizedBox(width: 12),
+          ],
           // Left side - Dashboard title
           const Text(
             "Dashboard",

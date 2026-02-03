@@ -18,9 +18,10 @@ class _CreateProjectModalState extends State<CreateProjectModal> {
   final _descriptionController = TextEditingController();
   final _streetController = TextEditingController();
   final _startDateController = TextEditingController();
-  final _endDateController = TextEditingController();
+  final _durationController = TextEditingController();
   final _budgetController = TextEditingController();
   bool _isSubmitting = false;
+  String? _calculatedEndDate;
 
   // Address hierarchy state
   int? _selectedRegionId;
@@ -65,7 +66,7 @@ class _CreateProjectModalState extends State<CreateProjectModal> {
     _descriptionController.dispose();
     _streetController.dispose();
     _startDateController.dispose();
-    _endDateController.dispose();
+    _durationController.dispose();
     _budgetController.dispose();
     super.dispose();
   }
@@ -151,6 +152,9 @@ class _CreateProjectModalState extends State<CreateProjectModal> {
       );
       if (response.statusCode == 200) {
         final List<dynamic> data = jsonDecode(response.body);
+        print(
+          '📋 Supervisors API Response: ${data.isNotEmpty ? data[0] : 'empty'}',
+        );
         setState(() {
           _supervisors = data.cast<Map<String, dynamic>>();
         });
@@ -170,6 +174,9 @@ class _CreateProjectModalState extends State<CreateProjectModal> {
       );
       if (response.statusCode == 200) {
         final List<dynamic> data = jsonDecode(response.body);
+        print(
+          '📋 Clients API Response: ${data.isNotEmpty ? data[0] : 'empty'}',
+        );
         setState(() {
           _clients = data.cast<Map<String, dynamic>>();
         });
@@ -210,6 +217,38 @@ class _CreateProjectModalState extends State<CreateProjectModal> {
     }
   }
 
+  void _calculateEndDate() {
+    if (_startDateController.text.isEmpty || _durationController.text.isEmpty) {
+      setState(() => _calculatedEndDate = null);
+      return;
+    }
+
+    try {
+      // Parse the start date from MM/DD/YYYY format
+      final parts = _startDateController.text.split('/');
+      if (parts.length == 3) {
+        final month = int.parse(parts[0]);
+        final day = int.parse(parts[1]);
+        final year = int.parse(parts[2]);
+        final startDate = DateTime(year, month, day);
+
+        final duration = int.tryParse(_durationController.text) ?? 0;
+        if (duration > 0) {
+          final endDate = startDate.add(Duration(days: duration));
+          setState(() {
+            _calculatedEndDate =
+                '${endDate.month.toString().padLeft(2, '0')}/${endDate.day.toString().padLeft(2, '0')}/${endDate.year}';
+          });
+        } else {
+          setState(() => _calculatedEndDate = null);
+        }
+      }
+    } catch (e) {
+      print('Error calculating end date: $e');
+      setState(() => _calculatedEndDate = null);
+    }
+  }
+
   Future<void> _selectDate(
     BuildContext context,
     TextEditingController controller,
@@ -225,6 +264,8 @@ class _CreateProjectModalState extends State<CreateProjectModal> {
         controller.text =
             '${picked.month.toString().padLeft(2, '0')}/${picked.day.toString().padLeft(2, '0')}/${picked.year}';
       });
+      // Recalculate end date when start date changes
+      _calculateEndDate();
     }
   }
 
@@ -302,7 +343,7 @@ class _CreateProjectModalState extends State<CreateProjectModal> {
 
         // Convert dates to YYYY-MM-DD format
         final startDate = _convertDateFormat(_startDateController.text);
-        final endDate = _convertDateFormat(_endDateController.text);
+        final endDate = _convertDateFormat(_calculatedEndDate ?? '');
 
         // Step 1: Create project WITHOUT image path first
         final payload = {
@@ -312,9 +353,10 @@ class _CreateProjectModalState extends State<CreateProjectModal> {
           'project_type': _selectedProjectType,
           'start_date': startDate,
           'end_date': endDate,
-          'client_id': _selectedClientId ?? 1,
-          'supervisor_id': _selectedSupervisorId ?? 1,
-          'budget': double.tryParse(_budgetController.text) ?? 0,
+          'duration_days': int.tryParse(_durationController.text) ?? 0,
+          'client': _selectedClientId,
+          'supervisor': _selectedSupervisorId,
+          'budget': double.tryParse(_budgetController.text) ?? 0.0,
           'region': _selectedRegionId,
           'province': _selectedProvinceId,
           'city': _selectedCityId,
@@ -963,7 +1005,7 @@ class _CreateProjectModalState extends State<CreateProjectModal> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 const Text(
-                                  'End Date',
+                                  'Duration (Days)',
                                   style: TextStyle(
                                     fontSize: 13,
                                     fontWeight: FontWeight.w600,
@@ -972,10 +1014,10 @@ class _CreateProjectModalState extends State<CreateProjectModal> {
                                 ),
                                 const SizedBox(height: 8),
                                 TextFormField(
-                                  controller: _endDateController,
-                                  readOnly: true,
+                                  controller: _durationController,
+                                  keyboardType: TextInputType.number,
                                   decoration: InputDecoration(
-                                    hintText: 'Select Date',
+                                    hintText: 'Enter days',
                                     hintStyle: TextStyle(
                                       fontSize: 14,
                                       color: Colors.grey[400],
@@ -983,7 +1025,7 @@ class _CreateProjectModalState extends State<CreateProjectModal> {
                                     filled: true,
                                     fillColor: const Color(0xFFF9FAFB),
                                     suffixIcon: const Icon(
-                                      Icons.calendar_today_outlined,
+                                      Icons.timer_outlined,
                                       size: 18,
                                     ),
                                     border: OutlineInputBorder(
@@ -999,11 +1041,14 @@ class _CreateProjectModalState extends State<CreateProjectModal> {
                                       ),
                                     ),
                                   ),
-                                  onTap: () =>
-                                      _selectDate(context, _endDateController),
+                                  onChanged: (value) => _calculateEndDate(),
                                   validator: (value) {
                                     if (value == null || value.isEmpty) {
                                       return 'Required';
+                                    }
+                                    if (int.tryParse(value) == null ||
+                                        int.parse(value) <= 0) {
+                                      return 'Enter valid days';
                                     }
                                     return null;
                                   },
@@ -1013,6 +1058,39 @@ class _CreateProjectModalState extends State<CreateProjectModal> {
                           ),
                         ],
                       ),
+
+                      // Show calculated end date
+                      if (_calculatedEndDate != null) ...[
+                        const SizedBox(height: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 8,
+                          ),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFE8F5E9),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(
+                                Icons.event_available,
+                                size: 18,
+                                color: Color(0xFF2E7D32),
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                'Expected End Date: $_calculatedEndDate',
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w500,
+                                  color: Color(0xFF2E7D32),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                       const SizedBox(height: 12),
 
                       // Client
@@ -1041,19 +1119,30 @@ class _CreateProjectModalState extends State<CreateProjectModal> {
                                   ),
                                 ),
                               ),
-                              items: _clients.map((client) {
-                                final clientId = client['client_id'] as int;
-                                final firstName =
-                                    client['first_name'] as String? ?? '';
-                                final lastName =
-                                    client['last_name'] as String? ?? '';
-                                final displayName = '$firstName $lastName'
-                                    .trim();
-                                return DropdownMenuItem<int>(
-                                  value: clientId,
-                                  child: Text(displayName),
-                                );
-                              }).toList(),
+                              items: _clients
+                                  .where(
+                                    (client) =>
+                                        (client['client_id'] as int?) != null &&
+                                        (client['client_id'] as int) > 0,
+                                  )
+                                  .map((client) {
+                                    final clientId = client['client_id'] as int;
+                                    final firstName =
+                                        client['first_name'] as String? ?? '';
+                                    final lastName =
+                                        client['last_name'] as String? ?? '';
+                                    final displayName = '$firstName $lastName'
+                                        .trim();
+                                    return DropdownMenuItem<int>(
+                                      value: clientId,
+                                      child: Text(
+                                        displayName.isEmpty
+                                            ? 'Unknown'
+                                            : displayName,
+                                      ),
+                                    );
+                                  })
+                                  .toList(),
                               onChanged: (int? newValue) {
                                 setState(() {
                                   _selectedClientId = newValue;
@@ -1088,20 +1177,35 @@ class _CreateProjectModalState extends State<CreateProjectModal> {
                                   ),
                                 ),
                               ),
-                              items: _supervisors.map((supervisor) {
-                                final supervisorId =
-                                    supervisor['supervisor_id'] as int;
-                                final firstName =
-                                    supervisor['first_name'] as String? ?? '';
-                                final lastName =
-                                    supervisor['last_name'] as String? ?? '';
-                                final displayName = '$firstName $lastName'
-                                    .trim();
-                                return DropdownMenuItem<int>(
-                                  value: supervisorId,
-                                  child: Text(displayName),
-                                );
-                              }).toList(),
+                              items: _supervisors
+                                  .where(
+                                    (supervisor) =>
+                                        (supervisor['supervisor_id'] as int?) !=
+                                            null &&
+                                        (supervisor['supervisor_id'] as int) >
+                                            0,
+                                  )
+                                  .map((supervisor) {
+                                    final supervisorId =
+                                        supervisor['supervisor_id'] as int;
+                                    final firstName =
+                                        supervisor['first_name'] as String? ??
+                                        '';
+                                    final lastName =
+                                        supervisor['last_name'] as String? ??
+                                        '';
+                                    final displayName = '$firstName $lastName'
+                                        .trim();
+                                    return DropdownMenuItem<int>(
+                                      value: supervisorId,
+                                      child: Text(
+                                        displayName.isEmpty
+                                            ? 'Unknown'
+                                            : displayName,
+                                      ),
+                                    );
+                                  })
+                                  .toList(),
                               onChanged: (int? newValue) {
                                 setState(() {
                                   _selectedSupervisorId = newValue;

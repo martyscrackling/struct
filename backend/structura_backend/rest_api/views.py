@@ -16,7 +16,13 @@ from .serializers import (
     BarangaySerializer,
     ProjectSerializer,
     SupervisorSerializer,
-    ClientSerializer
+    SupervisorsSerializer,
+    FieldWorkerSerializer,
+    ClientSerializer,
+    PhaseSerializer,
+    SubtaskSerializer,
+    SubtaskFieldWorkerSerializer,
+    AttendanceSerializer
 )
 
 class ListUser(generics.ListCreateAPIView):
@@ -32,7 +38,7 @@ class DetailUser(generics.RetrieveUpdateDestroyAPIView):
 def login_user(request):
     """
     Authenticate user with email and password.
-    Can login as either a User (ProjectManager), Supervisor, or Client.
+    Can login as either a User (ProjectManager), Worker, or Client.
     """
     try:
         data = json.loads(request.body)
@@ -68,11 +74,11 @@ def login_user(request):
                     status=status.HTTP_401_UNAUTHORIZED
                 )
         except models.User.DoesNotExist:
-            pass  # Not a User, check if it's a Supervisor or Client
+            pass  # Not a User, check if it's a Worker or Client
         
         # If not a regular user, check if they're a Supervisor
         try:
-            supervisor = models.Supervisor.objects.get(email=email)
+            supervisor = models.Supervisors.objects.get(email=email)
             # Check password
             if check_password(password, supervisor.password_hash):
                 return Response({
@@ -80,11 +86,13 @@ def login_user(request):
                     'message': 'Login successful',
                     'user': {
                         'supervisor_id': supervisor.supervisor_id,
+                        'user_id': supervisor.supervisor_id,  # Use supervisor_id as user_id
+                        'project_id': supervisor.project_id.project_id if supervisor.project_id else None,
                         'email': supervisor.email,
                         'first_name': supervisor.first_name,
                         'last_name': supervisor.last_name,
                         'role': 'Supervisor',
-                        'type': 'supervisor',  # Indicate this is a supervisor
+                        'type': 'Supervisor',  # Indicate this is a supervisor
                     }
                 }, status=status.HTTP_200_OK)
             else:
@@ -92,7 +100,7 @@ def login_user(request):
                     {'success': False, 'message': 'Invalid password'},
                     status=status.HTTP_401_UNAUTHORIZED
                 )
-        except models.Supervisor.DoesNotExist:
+        except models.Supervisors.DoesNotExist:
             pass  # Not a Supervisor, check if it's a Client
         
         # If not a supervisor, check if they're a Client
@@ -105,11 +113,13 @@ def login_user(request):
                     'message': 'Login successful',
                     'user': {
                         'client_id': client.client_id,
+                        'user_id': client.client_id,  # Use client_id as user_id
+                        'project_id': client.project_id.project_id if client.project_id else None,
                         'email': client.email,
                         'first_name': client.first_name,
                         'last_name': client.last_name,
                         'role': 'Client',
-                        'type': 'client',  # Indicate this is a client
+                        'type': 'Client',  # Indicate this is a client
                     }
                 }, status=status.HTTP_200_OK)
             else:
@@ -228,20 +238,121 @@ def debug_all_data(request):
     return Response({
         'total_users': models.User.objects.count(),
         'total_projects': models.Project.objects.count(),
-        'total_supervisors': models.Supervisor.objects.count(),
+        'total_supervisors': models.Supervisors.objects.count(),
         'total_clients': models.Client.objects.count(),
         'sample_users': list(models.User.objects.all().values('user_id', 'email')[:5]),
         'sample_projects': list(models.Project.objects.all().values('project_id', 'project_name', 'user_id')[:5]),
     })
 
 
-# Supervisor ViewSet
+# Supervisors ViewSet
+class SupervisorsViewSet(viewsets.ModelViewSet):
+    queryset = models.Supervisors.objects.all()
+    serializer_class = SupervisorsSerializer
+
+
+# Supervisor ViewSet (alias for backwards compatibility)
 class SupervisorViewSet(viewsets.ModelViewSet):
-    queryset = models.Supervisor.objects.all()
+    queryset = models.Supervisors.objects.all()
     serializer_class = SupervisorSerializer
+
+
+# FieldWorker ViewSet
+class FieldWorkerViewSet(viewsets.ModelViewSet):
+    queryset = models.FieldWorker.objects.all()
+    serializer_class = FieldWorkerSerializer
+
+    def get_queryset(self):
+        queryset = models.FieldWorker.objects.all()
+        project_id = self.request.query_params.get('project_id')
+        if project_id:
+            queryset = queryset.filter(project_id=project_id)
+        return queryset
 
 
 # Client ViewSet
 class ClientViewSet(viewsets.ModelViewSet):
     queryset = models.Client.objects.all()
     serializer_class = ClientSerializer
+
+
+# Phase ViewSet
+class PhaseViewSet(viewsets.ModelViewSet):
+    queryset = models.Phase.objects.all()
+    serializer_class = PhaseSerializer
+
+    def get_queryset(self):
+        queryset = models.Phase.objects.all()
+        project_id = self.request.query_params.get('project_id')
+        if project_id:
+            queryset = queryset.filter(project_id=project_id)
+        return queryset
+
+
+# Subtask ViewSet
+class SubtaskViewSet(viewsets.ModelViewSet):
+    queryset = models.Subtask.objects.all()
+    serializer_class = SubtaskSerializer
+
+    def get_queryset(self):
+        queryset = models.Subtask.objects.all()
+        phase_id = self.request.query_params.get('phase_id')
+        if phase_id:
+            queryset = queryset.filter(phase_id=phase_id)
+        return queryset
+
+
+# SubtaskFieldWorker ViewSet
+class SubtaskFieldWorkerViewSet(viewsets.ModelViewSet):
+    queryset = models.SubtaskFieldWorker.objects.all()
+    serializer_class = SubtaskFieldWorkerSerializer
+
+    def get_queryset(self):
+        queryset = models.SubtaskFieldWorker.objects.all()
+        subtask_id = self.request.query_params.get('subtask_id')
+        if subtask_id:
+            queryset = queryset.filter(subtask_id=subtask_id)
+        return queryset
+
+    def create(self, request, *args, **kwargs):
+        # Support bulk assignment
+        if isinstance(request.data, list):
+            serializer = self.get_serializer(data=request.data, many=True)
+            serializer.is_valid(raise_exception=True)
+            self.perform_create(serializer)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return super().create(request, *args, **kwargs)
+
+    def destroy(self, request, *args, **kwargs):
+        # Allow deleting all assignments for a subtask via query param
+        subtask_id = request.query_params.get('subtask_id')
+        if subtask_id:
+            deleted_count = models.SubtaskFieldWorker.objects.filter(
+                subtask_id=subtask_id
+            ).delete()[0]
+            return Response(
+                {'deleted': deleted_count},
+                status=status.HTTP_204_NO_CONTENT
+            )
+        return super().destroy(request, *args, **kwargs)
+
+
+# Attendance ViewSet
+class AttendanceViewSet(viewsets.ModelViewSet):
+    queryset = models.Attendance.objects.all()
+    serializer_class = AttendanceSerializer
+
+    def get_queryset(self):
+        queryset = models.Attendance.objects.all()
+        project_id = self.request.query_params.get('project_id')
+        attendance_date = self.request.query_params.get('attendance_date')
+        field_worker_id = self.request.query_params.get('field_worker_id')
+        
+        if project_id:
+            queryset = queryset.filter(project_id=project_id)
+        if attendance_date:
+            queryset = queryset.filter(attendance_date=attendance_date)
+        if field_worker_id:
+            queryset = queryset.filter(field_worker_id=field_worker_id)
+        
+        return queryset.order_by('-attendance_date')
